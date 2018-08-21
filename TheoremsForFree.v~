@@ -1,0 +1,13 @@
+
+Require Import Coq.Lists.List.
+
+Record R := {
+  A  : Type ;
+  A' : Type ;
+  r  : forall a : Type, list a -> list a ;
+  r_A  : list A -> list A ;
+  r_A' : list A' -> list A' ;
+  a_star : list A -> list A' 
+  }.  
+
+Theorem 

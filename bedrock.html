@@ -1,0 +1,836 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+<link href="coqdoc.css" rel="stylesheet" type="text/css" />
+<title>bedrock</title>
+</head>
+
+<body>
+
+<div id="page">
+
+<div id="header">
+</div>
+
+<div id="main">
+
+<h1 class="libtitle">Library bedrock</h1>
+
+<div class="code">
+
+<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+<b>Bedrock</b> is a <a href="http://coq.inria.fr/">Coq</a> library that supports implementation, specification, and verification of low-level programs.  Low-level means roughly "at the level of C or assembly," and the idea of "systems programming" is closely related, as some of the primary target domains for Bedrock are operating systems and runtime systems.
+
+<div class="paragraph"> </div>
+
+   Bedrock is <i>foundational</i>, meaning that one needs to trust very little code to believe that a program has really been verified.  Bedrock supports <i>higher-order</i> programs and specifications.  That is, programs may pass code pointers around as data, and specifications are allowed to quantify over other specifications.  Bedrock supports <i>mostly automated</i> proofs, to save programmers from the tedium of step-by-step formal derivations; and Bedrock is also an <i>extensible low-level programming language</i>, where programmers can add new features by justifying their logical soundness.
+
+<div class="paragraph"> </div>
+
+   This advertising pitch can be a bit of a mouthful.  To make things more concrete, we'll start with three small examples.  Some knowledge of Coq will be helpful in what follows, but especially our first pass through the examples should be accessible to a broad audience with a basic level of "POPL literacy."  Readers interested in applying Bedrock, but who <i>don't</i> have backgrounds in core Coq concepts, should consult some other source.  Naturally, the author is partial to his <i>Certified Programming with Dependent Types</i>.  Other popular choices are <i>Software Foundations</i> by Pierce et al. and <i>Coq'Art</i> by Bertot and Casteran.
+
+<div class="paragraph"> </div>
+
+   This document is generated from a literate Coq source file (<tt>doc/Tutorial.v</tt> in the Bedrock distribution) using <tt>coqdoc</tt>. 
+<div class="paragraph"> </div>
+
+<a name="lab1"></a><h1 class="section">Three Verified Bedrock Programs</h1>
+
+<div class="paragraph"> </div>
+
+<a name="lab2"></a><h2 class="section">A Trivial Example: The Addition Function</h2>
+
+<div class="paragraph"> </div>
+
+ To begin, we issue the following magic incantation to turn a normal Coq session into a Bedrock session, where we have run Coq with command-line arguments <tt>-R BEDROCK/src Bedrock -I BEDROCK/examples</tt>, with <tt>BEDROCK</tt> replaced by the directory for a Bedrock installation, where we have already run <tt>make</tt> successfully, at least up through the point where it finishes building <tt>AutoSep.vo</tt>. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Require</span> <span class="id" title="keyword">Import</span> <span class="id" title="var">AutoSep</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+Importing a library module may not seem like magic, but this module, like any other module in Coq may choose to do, exports syntax extensions and tactics that allow a very different sort of coding than one sees in most Coq developments.  We demonstrate by implementing a function for adding together two machine integers.  Bedrock is an environment for <i>verified</i> programming, so we should start by writing a <i>specification</i> for our function. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Definition</span> <span class="id" title="var">addS</span> := <span class="id" title="var">SPEC</span>("n", "m") <span class="id" title="var">reserving</span> 0<br/>
+&nbsp;&nbsp;<span class="id" title="var">PRE</span>[<span class="id" title="var">V</span>] [| <span class="id" title="var">True</span> |]<br/>
+&nbsp;&nbsp;<span class="id" title="var">POST</span>[<span class="id" title="var">R</span>] [| <span class="id" title="var">R</span> = <span class="id" title="var">V</span> "n" ^+ <span class="id" title="var">V</span> "m" |].<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+Up through the <span class="inlinecode">:=</span>, this is normal Coq syntax for associating an identifier with a definition.  Past that point, we use a special Bedrock notation.  The <span class="inlinecode"><span class="id" title="var">SPEC</span>(&quot;<span class="id" title="var">n</span>&quot;,</span> <span class="inlinecode">&quot;<span class="id" title="var">m</span>&quot;)</span> part declares this as a spec for a function of two arguments with the given formal parameter names, and <span class="inlinecode"><span class="id" title="var">reserving</span></span> <span class="inlinecode">0</span> declares that this function will require no more stack space than is needed to store its parameters.  (As Bedrock is targeted at operating systems and similar lowest-level code, we opt for static tracking of stack space usage, rather than forcing use of a fixed dynamic regime for avoiding stack overflows.  Furthermore, handling of the stack is not built into the underlying program logic, and it is possible to implement alternate regimes without changing the Bedrock library.)
+
+<div class="paragraph"> </div>
+
+   A specification includes a <i>precondition</i> and a <i>postcondition</i>.  The notation <span class="inlinecode"><span class="id" title="var">PRE</span>[<span class="id" title="var">V</span>]</span> introduces a precondition, binding a local variable <span class="inlinecode"><span class="id" title="var">V</span></span> that can be used to refer to the function argument values.  In this example, we impose no conditions on the arguments, so the precondition is merely <span class="inlinecode"><span class="id" title="var">True</span></span>.  Actually, Bedrock uses a fancier domain of logical assertions than Coq's usual <span class="inlinecode"><span class="id" title="keyword">Prop</span></span>, so we need to use the <span class="inlinecode">[|</span> <span class="inlinecode">...</span> <span class="inlinecode">|]</span> operator to <i>lift</i> a normal proposition as an assertion.  More later on what assertions really are.  
+
+<div class="paragraph"> </div>
+
+   A postcondition begins with the notation <span class="inlinecode"><span class="id" title="var">POST</span>[<span class="id" title="var">R</span>]</span>, which introduces a local variable <span class="inlinecode"><span class="id" title="var">R</span></span> to stand for the function return value.  In our postcondition above, we require that the return value equals the sum of the two function arguments, where we write addition with the <span class="inlinecode">^+</span> operator, which applies to machine words.
+
+<div class="paragraph"> </div>
+
+   Now that we know <i>what</i> our function is meant to do, we can show <i>how</i> to do it with an implementation.  This will be a Bedrock <i>module</i>, which in general might contain several functions, but which will only contain one function here. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Definition</span> <span class="id" title="var">addM</span> := <span class="id" title="var">bmodule</span> "add" {{<br/>
+&nbsp;&nbsp;<span class="id" title="var">bfunction</span> "add"("n", "m") [<span class="id" title="var">addS</span>]<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">Return</span> "n" + "m"<br/>
+&nbsp;&nbsp;<span class="id" title="keyword">end</span><br/>
+}}.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+The syntax should be mostly self-explanatory, for readers familiar with the C programming language.  Two points are nonstandard, beyond just the concrete syntax.  First, we refer to variable names with string literals.  These are <i>not</i> string literals in the Bedrock programming language, but merely a trick to get Coq's lexer to accept C-like programs.  Second, the function header ends in a Coq term between square brackets.  This is the position where each function <i>must</i> have a specification.
+
+<div class="paragraph"> </div>
+
+   It doesn't seem surprising that <span class="inlinecode"><span class="id" title="var">addM</span></span> should be a correct implementation of an addition function, but, just to be sure, let's <i>prove it</i>. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Theorem</span> <span class="id" title="var">addMOk</span> : <span class="id" title="var">moduleOk</span> <span class="id" title="var">addM</span>.<br/>
+<span class="id" title="keyword">Proof</span>.<br/>
+&nbsp;&nbsp;<span class="id" title="var">vcgen</span>; <span class="id" title="var">sep_auto</span>.<br/>
+<span class="id" title="keyword">Qed</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+The predicate <span class="inlinecode"><span class="id" title="var">moduleOk</span></span> captures the usual notion from Hoare Logic, etc., of when a program satisfies a specification.  Here we prove correctness by chaining invocations of two tactics: <span class="inlinecode"><span class="id" title="var">vcgen</span></span>, which performs <i>verification condition generation</i>, reducing program correctness to a set of proof obligations that only refer directly to straightline code, not structured code; and <span class="inlinecode"><span class="id" title="var">sep_auto</span></span>, a simplification procedure based on <i>separation logic</i> that is quite a bit of overkill for this example, but gets the job done.  (There actually <i>is</i> some quite non-trivial reasoning going on behind the scenes here, dealing with complexity hidden by our nice notations; more on that later.) 
+<div class="paragraph"> </div>
+
+<a name="lab3"></a><h2 class="section">Pointers and Memory: A Swap Function</h2>
+
+<div class="paragraph"> </div>
+
+ A crucial component of low-level programming is mutable state, which we introduce with a simple example: a function that takes two pointers as arguments and swaps the values in the memory cells that they point to.  Here is its spec. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Definition</span> <span class="id" title="var">swapS</span> := <span class="id" title="var">SPEC</span>("x", "y") <span class="id" title="var">reserving</span> 2<br/>
+&nbsp;&nbsp;<span class="id" title="var">Al</span> <span class="id" title="var">v</span>, <span class="id" title="var">Al</span> <span class="id" title="var">w</span>,<br/>
+&nbsp;&nbsp;<span class="id" title="var">PRE</span>[<span class="id" title="var">V</span>] <span class="id" title="var">V</span> "x" =*&gt; <span class="id" title="var">v</span> * <span class="id" title="var">V</span> "y" =*&gt; <span class="id" title="var">w</span><br/>
+&nbsp;&nbsp;<span class="id" title="var">POST</span>[<span class="id" title="var">_</span>] <span class="id" title="var">V</span> "x" =*&gt; <span class="id" title="var">w</span> * <span class="id" title="var">V</span> "y" =*&gt; <span class="id" title="var">v</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+We see several important changes from the last spec.  First, this time we reserve 2 stack slots, to use for local variable temporaries.  Second, the spec is <i>universally quantified</i>.  The function may be called whenever the precondition can be satisfied <i>for some values of <span class="inlinecode"><span class="id" title="var">v</span></span> and <span class="inlinecode"><span class="id" title="var">w</span></span></i>.  Note that the same quantified variables appear in precondition and postcondition, giving us a way to connect the initial and final states of a function call.
+
+<div class="paragraph"> </div>
+
+   Both precondition and postcondition use notation inspired by <i>separation logic</i>.  The syntax <span class="inlinecode"><span class="id" title="var">p</span></span> <span class="inlinecode">=*&gt;</span> <span class="inlinecode"><span class="id" title="var">v</span></span> indicates that pointer <span class="inlinecode"><span class="id" title="var">p</span></span> points to a memory cell holding value <span class="inlinecode"><span class="id" title="var">v</span></span>.  The <span class="inlinecode">*</span> operator combines facts about smaller memories into facts about larger composite memories.  The concrete precondition above says that the function will be aware of only two memory cells, whose addresses come from the values of parameters <span class="inlinecode">&quot;<span class="id" title="var">x</span>&quot;</span> and <span class="inlinecode">&quot;<span class="id" title="var">y</span>&quot;</span>.  These cells start out holding <span class="inlinecode"><span class="id" title="var">v</span></span> and <span class="inlinecode"><span class="id" title="var">w</span></span>, respectively.  The postcondition says that the function swaps these values.
+
+<div class="paragraph"> </div>
+
+   Here is an implementation. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Definition</span> <span class="id" title="var">swap</span> := <span class="id" title="var">bmodule</span> "swap" {{<br/>
+&nbsp;&nbsp;<span class="id" title="var">bfunction</span> "swap"("x", "y", "v", "w") [<span class="id" title="var">swapS</span>]<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"v" &lt;-* "x";;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"w" &lt;-* "y";;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"x" *&lt;- "w";;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"y" *&lt;- "v";;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">Return</span> 0<br/>
+&nbsp;&nbsp;<span class="id" title="keyword">end</span><br/>
+}}.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+We write private local variables as extra function formal parameters.  The operator <span class="inlinecode">;;</span> sequences commands, the operator <span class="inlinecode">&lt;-*</span> is a memory read, and <span class="inlinecode">*&lt;-</span> is memory write.
+
+<div class="paragraph"> </div>
+
+   Our function is not very complex, but there are still opportunities for mistakes.  A quick verification establishes that we implemented it right after all. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Theorem</span> <span class="id" title="var">swapOk</span> : <span class="id" title="var">moduleOk</span> <span class="id" title="var">swap</span>.<br/>
+<span class="id" title="keyword">Proof</span>.<br/>
+&nbsp;&nbsp;<span class="id" title="var">vcgen</span>; <span class="id" title="var">sep_auto</span>.<br/>
+<span class="id" title="keyword">Qed</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+<a name="lab4"></a><h2 class="section">An Abstract Predicate: In-Place List Reverse</h2>
+
+<div class="paragraph"> </div>
+
+ Bedrock also supports highly automated verifications that involve <i>data structures</i>, formalized in a way similar to <i>abstract predicates</i> in separation logic.  As an example, consider the following recursive definition of an abstract predicate for singly linked lists. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Fixpoint</span> <span class="id" title="var">sll</span> (<span class="id" title="var">ls</span> : <span class="id" title="var">list</span> <span class="id" title="var">W</span>) (<span class="id" title="var">p</span> : <span class="id" title="var">W</span>) : <span class="id" title="var">HProp</span> :=<br/>
+&nbsp;&nbsp;<span class="id" title="keyword">match</span> <span class="id" title="var">ls</span> <span class="id" title="keyword">with</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| <span class="id" title="var">nil</span> =&gt; [| <span class="id" title="var">p</span> = 0 |]<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| <span class="id" title="var">x</span> :: <span class="id" title="var">ls'</span> =&gt; [| <span class="id" title="var">p</span> &lt;&gt; 0 |] * <span class="id" title="var">Ex</span> <span class="id" title="var">p'</span>, (<span class="id" title="var">p</span> ==*&gt; <span class="id" title="var">x</span>, <span class="id" title="var">p'</span>) * <span class="id" title="var">sll</span> <span class="id" title="var">ls'</span> <span class="id" title="var">p'</span><br/>
+&nbsp;&nbsp;<span class="id" title="keyword">end</span>%<span class="id" title="var">Sep</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+The type <span class="inlinecode"><span class="id" title="var">W</span></span> is for machine words, and the <span class="inlinecode">%<span class="id" title="var">Sep</span></span> at the end of the definition asks to parse the function body using the rules for separation logic-style assertions.
+
+<div class="paragraph"> </div>
+
+   The predicate <span class="inlinecode"><span class="id" title="var">sll</span></span> <span class="inlinecode"><span class="id" title="var">ls</span></span> <span class="inlinecode"><span class="id" title="var">p</span></span> captures the idea that mathematical list <span class="inlinecode"><span class="id" title="var">ls</span></span> is encoded in memory, starting from root pointer <span class="inlinecode"><span class="id" title="var">p</span></span>.  The codomain <span class="inlinecode"><span class="id" title="var">HProp</span></span> is the domain of predicates over memories.
+
+<div class="paragraph"> </div>
+
+   We define <span class="inlinecode"><span class="id" title="var">sll</span></span> by recursion on the structure of <span class="inlinecode"><span class="id" title="var">ls</span></span>.  If the list is empty, then we merely assert the lifted fact <span class="inlinecode"><span class="id" title="var">p</span></span> <span class="inlinecode">=</span> <span class="inlinecode">0</span>, forcing <span class="inlinecode"><span class="id" title="var">p</span></span> to be null.  Note that a lifted fact takes up no memory, so we implicitly assert emptiness of whatever memory this <span class="inlinecode"><span class="id" title="var">HProp</span></span> is later applied to.
+
+<div class="paragraph"> </div>
+
+   If the list is nonempty, we split it into head <span class="inlinecode"><span class="id" title="var">x</span></span> and tail <span class="inlinecode"><span class="id" title="var">ls'</span></span>.  Next, we assert that <span class="inlinecode"><span class="id" title="var">p</span></span> is not null, and that there exists some pointer <span class="inlinecode"><span class="id" title="var">p'</span></span> such that <span class="inlinecode"><span class="id" title="var">p</span></span> points in memory to the two values <span class="inlinecode"><span class="id" title="var">x</span></span> and <span class="inlinecode"><span class="id" title="var">p'</span></span>, such that <span class="inlinecode"><span class="id" title="var">p'</span></span> is the root of a list encoding <span class="inlinecode"><span class="id" title="var">ls'</span></span>.  By using <span class="inlinecode">*</span>, we implicitly require that all of the memory regions that we are describing are <i>disjoint</i> from each other.
+
+<div class="paragraph"> </div>
+
+   To avoid depending on Coq's usual axiom of functional extensionality, Bedrock requires that we prove administrative lemmas like the following for each new separation logic-style predicate we define. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Theorem</span> <span class="id" title="var">sll_extensional</span> : <span class="id" title="keyword">forall</span> <span class="id" title="var">ls</span> (<span class="id" title="var">p</span> : <span class="id" title="var">W</span>), <span class="id" title="var">HProp_extensional</span> (<span class="id" title="var">sll</span> <span class="id" title="var">ls</span> <span class="id" title="var">p</span>).<br/>
+<span class="id" title="keyword">Proof</span>.<br/>
+&nbsp;&nbsp;<span class="id" title="tactic">destruct</span> <span class="id" title="var">ls</span>; <span class="id" title="tactic">reflexivity</span>.<br/>
+<span class="id" title="keyword">Qed</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+We add the lemma as a hint, so that appropriate machinery within Bedrock knows about it. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Hint Immediate</span> <span class="id" title="var">sll_extensional</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+We want to treat the predicate <span class="inlinecode"><span class="id" title="var">sll</span></span> abstractly, relying only on a set of rules for simplifying its uses.  For instance, here is an implication in separation logic, establishing the consequences of a list with a null root pointer. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Theorem</span> <span class="id" title="var">nil_fwd</span> : <span class="id" title="keyword">forall</span> <span class="id" title="var">ls</span> (<span class="id" title="var">p</span> : <span class="id" title="var">W</span>), <span class="id" title="var">p</span> = 0<br/>
+&nbsp;&nbsp;-&gt; <span class="id" title="var">sll</span> <span class="id" title="var">ls</span> <span class="id" title="var">p</span> ===&gt; [| <span class="id" title="var">ls</span> = <span class="id" title="var">nil</span> |].<br/>
+<span class="id" title="keyword">Proof</span>.<br/>
+&nbsp;&nbsp;<span class="id" title="tactic">destruct</span> <span class="id" title="var">ls</span>; <span class="id" title="var">sepLemma</span>.<br/>
+<span class="id" title="keyword">Qed</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+The proof only needs to request a case analysis on <span class="inlinecode"><span class="id" title="var">ls</span></span> and then hand off the rest of the work to <span class="inlinecode"><span class="id" title="var">sepLemma</span></span>, a relative of <span class="inlinecode"><span class="id" title="var">sep_auto</span></span>.  Staying at more or less this same level of automation, we also prove 3 more useful facts about <span class="inlinecode"><span class="id" title="var">sll</span></span>. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Theorem</span> <span class="id" title="var">nil_bwd</span> : <span class="id" title="keyword">forall</span> <span class="id" title="var">ls</span> (<span class="id" title="var">p</span> : <span class="id" title="var">W</span>), <span class="id" title="var">p</span> = 0<br/>
+&nbsp;&nbsp;-&gt; [| <span class="id" title="var">ls</span> = <span class="id" title="var">nil</span> |] ===&gt; <span class="id" title="var">sll</span> <span class="id" title="var">ls</span> <span class="id" title="var">p</span>.<br/>
+<span class="id" title="keyword">Proof</span>.<br/>
+&nbsp;&nbsp;<span class="id" title="tactic">destruct</span> <span class="id" title="var">ls</span>; <span class="id" title="var">sepLemma</span>.<br/>
+<span class="id" title="keyword">Qed</span>.<br/>
+
+<br/>
+<span class="id" title="keyword">Theorem</span> <span class="id" title="var">cons_fwd</span> : <span class="id" title="keyword">forall</span> <span class="id" title="var">ls</span> (<span class="id" title="var">p</span> : <span class="id" title="var">W</span>), <span class="id" title="var">p</span> &lt;&gt; 0<br/>
+&nbsp;&nbsp;-&gt; <span class="id" title="var">sll</span> <span class="id" title="var">ls</span> <span class="id" title="var">p</span> ===&gt; <span class="id" title="var">Ex</span> <span class="id" title="var">x</span>, <span class="id" title="var">Ex</span> <span class="id" title="var">ls'</span>, [| <span class="id" title="var">ls</span> = <span class="id" title="var">x</span> :: <span class="id" title="var">ls'</span> |] * <span class="id" title="var">Ex</span> <span class="id" title="var">p'</span>, (<span class="id" title="var">p</span> ==*&gt; <span class="id" title="var">x</span>, <span class="id" title="var">p'</span>) * <span class="id" title="var">sll</span> <span class="id" title="var">ls'</span> <span class="id" title="var">p'</span>.<br/>
+<span class="id" title="keyword">Proof</span>.<br/>
+&nbsp;&nbsp;<span class="id" title="tactic">destruct</span> <span class="id" title="var">ls</span>; <span class="id" title="var">sepLemma</span>.<br/>
+<span class="id" title="keyword">Qed</span>.<br/>
+
+<br/>
+<span class="id" title="keyword">Theorem</span> <span class="id" title="var">cons_bwd</span> : <span class="id" title="keyword">forall</span> <span class="id" title="var">ls</span> (<span class="id" title="var">p</span> : <span class="id" title="var">W</span>), <span class="id" title="var">p</span> &lt;&gt; 0<br/>
+&nbsp;&nbsp;-&gt; (<span class="id" title="var">Ex</span> <span class="id" title="var">x</span>, <span class="id" title="var">Ex</span> <span class="id" title="var">ls'</span>, [| <span class="id" title="var">ls</span> = <span class="id" title="var">x</span> :: <span class="id" title="var">ls'</span> |] * <span class="id" title="var">Ex</span> <span class="id" title="var">p'</span>, (<span class="id" title="var">p</span> ==*&gt; <span class="id" title="var">x</span>, <span class="id" title="var">p'</span>) * <span class="id" title="var">sll</span> <span class="id" title="var">ls'</span> <span class="id" title="var">p'</span>) ===&gt; <span class="id" title="var">sll</span> <span class="id" title="var">ls</span> <span class="id" title="var">p</span>.<br/>
+<span class="id" title="keyword">Proof</span>.<br/>
+&nbsp;&nbsp;<span class="id" title="tactic">destruct</span> <span class="id" title="var">ls</span>; <span class="id" title="var">sepLemma</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="keyword">match</span> <span class="id" title="keyword">goal</span> <span class="id" title="keyword">with</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| [ <span class="id" title="var">H</span> : <span class="id" title="var">_</span> :: <span class="id" title="var">_</span> = <span class="id" title="var">_</span> :: <span class="id" title="var">_</span> |- <span class="id" title="var">_</span> ] =&gt; <span class="id" title="tactic">injection</span> <span class="id" title="var">H</span>; <span class="id" title="var">sepLemma</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="keyword">end</span>.<br/>
+<span class="id" title="keyword">Qed</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+So that Bedrock knows to use these rules where applicable, we combine them into a <i>hint package</i>, using a Bedrock tactic <span class="inlinecode"><span class="id" title="var">prepare</span></span>. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Definition</span> <span class="id" title="var">hints</span> : <span class="id" title="var">TacPackage</span>.<br/>
+&nbsp;&nbsp;<span class="id" title="var">prepare</span> (<span class="id" title="var">nil_fwd</span>, <span class="id" title="var">cons_fwd</span>) (<span class="id" title="var">nil_bwd</span>, <span class="id" title="var">cons_bwd</span>).<br/>
+<span class="id" title="keyword">Defined</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+Now that we have our general "theory of lists" in place, we can specify and verify in-placed reversal for lists. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Definition</span> <span class="id" title="var">revS</span> := <span class="id" title="var">SPEC</span>("x") <span class="id" title="var">reserving</span> 3<br/>
+&nbsp;&nbsp;<span class="id" title="var">Al</span> <span class="id" title="var">ls</span>,<br/>
+&nbsp;&nbsp;<span class="id" title="var">PRE</span>[<span class="id" title="var">V</span>] <span class="id" title="var">sll</span> <span class="id" title="var">ls</span> (<span class="id" title="var">V</span> "x")<br/>
+&nbsp;&nbsp;<span class="id" title="var">POST</span>[<span class="id" title="var">R</span>] <span class="id" title="var">sll</span> (<span class="id" title="var">rev</span> <span class="id" title="var">ls</span>) <span class="id" title="var">R</span>.<br/>
+
+<br/>
+<span class="id" title="keyword">Definition</span> <span class="id" title="var">revM</span> := <span class="id" title="var">bmodule</span> "rev" {{<br/>
+&nbsp;&nbsp;<span class="id" title="var">bfunction</span> "rev"("x", "acc", "tmp1", "tmp2") [<span class="id" title="var">revS</span>]<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"acc" &lt;- 0;;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;[<span class="id" title="var">Al</span> <span class="id" title="var">ls</span>, <span class="id" title="var">Al</span> <span class="id" title="var">accLs</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">PRE</span>[<span class="id" title="var">V</span>] <span class="id" title="var">sll</span> <span class="id" title="var">ls</span> (<span class="id" title="var">V</span> "x") * <span class="id" title="var">sll</span> <span class="id" title="var">accLs</span> (<span class="id" title="var">V</span> "acc")<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">POST</span>[<span class="id" title="var">R</span>] <span class="id" title="var">sll</span> (<span class="id" title="var">rev_append</span> <span class="id" title="var">ls</span> <span class="id" title="var">accLs</span>) <span class="id" title="var">R</span> ]<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">While</span> ("x" &lt;&gt; 0) {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"tmp2" &lt;- "x";;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"tmp1" &lt;- "x" + 4;;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"x" &lt;-* "tmp1";;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"tmp1" *&lt;- "acc";;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"acc" &lt;- "tmp2"<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;};;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">Return</span> "acc"<br/>
+&nbsp;&nbsp;<span class="id" title="keyword">end</span><br/>
+}}.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+Note that the function implementation contains a <span class="inlinecode"><span class="id" title="var">While</span></span> loop with a <i>loop invariant</i> before it.  As for all instances of invariants appearing within Bedrock programs, we put the loop invariant within square brackets.  We must be slightly clever in stating what is essentially a strengthened induction hypothesis.  Where the overall function is specified in terms of the function <span class="inlinecode"><span class="id" title="var">rev</span></span>, reasoning about intermediate loop states requires use of the <span class="inlinecode"><span class="id" title="var">rev_append</span></span> function.  (There is also something else quite interesting going on in our choice of invariant.  We reveal exactly what in discussing a simpler example in a later section.)
+
+<div class="paragraph"> </div>
+
+   Tactics like <span class="inlinecode"><span class="id" title="var">sep_auto</span></span> take care of most reasoning about programs and memories.  A finished Bedrock proof generally consists of little more than the right hints to finish the rest of the process.  The <span class="inlinecode"><span class="id" title="var">hints</span></span> package we created above supplies rules for reasoning about memories and abstract predicates, and we can use Coq's normal hint mechanism to help with goals that remain, which will generally be about more standard mathematical domains.  Our example here uses Coq's <span class="inlinecode"><span class="id" title="var">list</span></span> type family, and the only help Bedrock needs to verify <span class="inlinecode">&quot;<span class="id" title="var">rev</span>&quot;</span> will be a lemma from the standard library that relates <span class="inlinecode"><span class="id" title="var">rev</span></span> and <span class="inlinecode"><span class="id" title="var">rev_append</span></span>, added to a hint database that Bedrock uses in simplifying separation logic-style formulas. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Hint Rewrite</span> &lt;- <span class="id" title="var">rev_alt</span> : <span class="id" title="var">sepFormula</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+Now the proof script is almost the same as before, except we call Bedrock tactic <span class="inlinecode"><span class="id" title="var">sep</span></span> instead of <span class="inlinecode"><span class="id" title="var">sep_auto</span></span>.  The former takes a hint package as argument. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Theorem</span> <span class="id" title="var">revMOk</span> : <span class="id" title="var">moduleOk</span> <span class="id" title="var">revM</span>.<br/>
+<span class="id" title="keyword">Proof</span>.<br/>
+&nbsp;&nbsp;<span class="id" title="var">vcgen</span>; <span class="id" title="var">sep</span> <span class="id" title="var">hints</span>.<br/>
+<span class="id" title="keyword">Qed</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+<a name="lab5"></a><h1 class="section">Foundational Guarantees</h1>
+
+<div class="paragraph"> </div>
+
+ What does <span class="inlinecode"><span class="id" title="var">moduleOk</span></span> really mean?  The Bedrock library defines it in a way that can be used to generate theorems about behavioral properties of programs in an assembly-like language (the <b>Bedrock IL</b>), such that the theorem statement only depends on a conventional operational semantics for this language.  This means we can apply Coq's normal <i>proof checker</i> to validate our verification results, without trusting anything about the process whereby the proofs were constructed.  When the <i>trusted code base</i> of a verification system is so small, we call the system (or the theorems it produces) <i>foundational</i>.
+
+<div class="paragraph"> </div>
+
+   This section of the tutorial explains exactly what is the final product of a Bedrock verification.  Here and throughout the tutorial, we omit fully detailed formalizations, since the Coq source code already does a more thorough job of that than we could hope to do here. 
+<div class="paragraph"> </div>
+
+<a name="lab6"></a><h2 class="section">The Bedrock IL</h2>
+
+<div class="paragraph"> </div>
+
+ <p><b>A nifty BNF grammar appears here in the PDF version!</b></p>
+   
+
+<div class="paragraph"> </div>
+
+   Figure <i>(omitted in HTML version)</i> gives the complete syntax of the Bedrock IL, which is meant to be a cross between an assembly language and a compiler intermediate language.  Like an assembly language, there are a fixed word size, a small set of registers, and direct access to an array-like finite memory.  Like a compiler intermediate language, the Bedrock IL is designed to be compiled to a variety of popular assembly languages, though this compilation process is more straightforward than usual.  There is no built-in notion of local variables or calling conventions, but code labels are maintained with special syntactic treatment, to allow compilation to perform certain jump-related optimizations soundly.
+
+<div class="paragraph"> </div>
+
+   The IL has a standard operational semantics, implemented in Coq.  A global parameter of a program execution maps code labels to machine words, so that memory and register values may be treated uniformly as words, even with stored code pointers.  The semantics <i>gets stuck</i> if a program tries to jump to a word not associated with any code label.  Further, another piece of global state gives a <i>memory access policy</i>, identifying a set of addresses that the program may read from or write to.  Execution gets stuck on any memory access outside this set.  One consequence of verifying a whole-program Bedrock module is that we are guaranteed lack of stuckness during execution, starting in states related appropriately to the module's specs. 
+<div class="paragraph"> </div>
+
+<a name="lab7"></a><h2 class="section">The XCAP PropX Assertion Logic</h2>
+
+<div class="paragraph"> </div>
+
+ It is one of the surprising facts of formal semantics that merely stating an operational semantics for a programming language is not enough to enable <i>modular</i> program verification.  That is, we want to verify libraries separately and then compose their correctness theorems to yield a theorem about the final program.  We must fix some <i>theorem format</i> that enables easy composition, and a <i>program logic</i> may be thought of as such a format.
+
+<div class="paragraph"> </div>
+
+   Bedrock adopts an adapted version of the XCAP program logic by Ni and Shao.  The central novel feature of XCAP is support for <i>first-class code pointers</i> in a logic expressive enough to verify <i>functional correctness</i>, not just traditional notions of type safety.  However, XCAP's insight is to apply the <i>syntactic approach to type soundness</i> in this richer setting.  We no longer think in terms of assigning types to the variables of a program, but we retain the key idea of establishing a global <i>invariant</i> that all reachable program states must satisfy, where the invariant is expressed in terms of a <i>syntactic language of assertions</i>.  In Coq, this notion of <i>syntactic</i> means <i>deep embedding</i> of a type of formulas.
+
+<div class="paragraph"> </div>
+
+   <p><b>A nifty BNF grammar appears here in the PDF version!</b></p>
+   
+
+<div class="paragraph"> </div>
+
+   Figure <i>(omitted in HTML version)</i> gives the syntax of , XCAP's language of formulas, otherwise known as an <i>assertion logic</i> when taken together with the associated proof rules.  The standard connectives <span class="inlinecode">/\</span>, <span class="inlinecode">\/</span>, <span class="inlinecode">---&gt;</span>, <span class="inlinecode"><span class="id" title="keyword">forall</span></span>, and <span class="inlinecode"><span class="id" title="tactic">exists</span></span> are present, but a few other cases imbue the logic with a richer structure.  First, the lifting operator <span class="inlinecode">[|</span> <span class="inlinecode"><span class="id" title="var">_</span></span> <span class="inlinecode">|]</span> allows injection of <i>any Coq proposition</i>.
+
+<div class="paragraph"> </div>
+
+   One may wonder what is the point of defining a layer of syntax like this one, instead of just using normal Coq propositions.  The surprising answer is that it is difficult to support <i>modular theorems about first-class code pointers</i> without some extra layer of complication, and for XCAP, that layer is associated with formulas <span class="inlinecode"><span class="id" title="var">Cptr</span></span> <span class="inlinecode"><span class="id" title="var">w</span></span> <span class="inlinecode"><span class="id" title="var">f</span></span>.  Such a formula asserts that word <span class="inlinecode"><span class="id" title="var">w</span></span> points to a valid code block, whose specification is <span class="inlinecode"><span class="id" title="var">f</span></span>, a function from machine states to formulas.  The idea is that <span class="inlinecode"><span class="id" title="var">f</span>(<span class="id" title="var">s</span>)</span> is true iff it is safe to jump to <span class="inlinecode"><span class="id" title="var">w</span></span> in state <span class="inlinecode"><span class="id" title="var">s</span></span>.
+
+<div class="paragraph"> </div>
+
+   It may be unclear how this logic connects to our earlier examples.  We only have a way to say when it is <i>safe</i> to jump to a code block, which does not directly yield the discipline of functions, preconditions, and postconditions.  The explanation is that we <i>encode</i> such disciplines using <i>higher-order</i> features.  Bedrock IL programs, like assembly programs, are inherently in <i>continuation-passing style</i>, and it is possible to lower <i>direct style</i> programs to this format and reason about them in a logic that only builds in primitives for continuations, not functions.  The freedom to work with continuations when needed will be invaluable in implementing and verifying systems components like thread schedulers.
+
+<div class="paragraph"> </div>
+
+   The second line of the grammar for PropX gives some more interesting cases: those associated with <i>impredicative quantifiers</i>, which may range over assertions themselves.  With these quantifiers, we can get around an apparent deficiency of <span class="inlinecode"><span class="id" title="var">Cptr</span></span>, which is that its arguments must give the <i>exact</i> spec of a code block, whereas we will generally want to require only that the spec of the code block be <i>implied</i> by some other spec.  We define an infix operator <span class="inlinecode">@@</span> for this laxer version of <span class="inlinecode"><span class="id" title="var">Cptr</span></span>.
+   <br/>
+<span class="inlinecode"><span class="id" title="keyword">Notation</span> "w @@ f" := (<span class="id" title="var">ExX</span>, <span class="id" title="var">Cptr</span> <span class="id" title="var">w</span> #0 /\ <span class="id" title="var">Al</span> <span class="id" title="var">s</span>, <span class="id" title="var">f</span> <span class="id" title="var">s</span> ---&gt; #0 <span class="id" title="var">s</span>)%<span class="id" title="var">PropX</span>.<br/>
+&nbsp;&nbsp;&nbsp;
+<div class="paragraph"> </div>
+
+</span>   This syntax is complicated by the fact that we represent impredicative quantifiers with <i>de Bruijn indices</i>.  Unraveling that detail, we can rephrase the above definition as: program counter <span class="inlinecode"><span class="id" title="var">w</span></span> may be treated as having spec <span class="inlinecode"><span class="id" title="var">f</span></span> if there exists a such that (1) a is the literal spec of <span class="inlinecode"><span class="id" title="var">w</span></span> and (2) any state <span class="inlinecode"><span class="id" title="var">s</span></span> satisfying <span class="inlinecode"><span class="id" title="var">f</span></span> also satisfies a.
+
+<div class="paragraph"> </div>
+
+   A PropX p is translated to a <span class="inlinecode"><span class="id" title="keyword">Prop</span></span> using the <span class="inlinecode"><span class="id" title="var">interp</span></span> function, applied like <span class="inlinecode"><span class="id" title="var">interp</span></span> <span class="inlinecode"><span class="id" title="var">specs</span></span> p, where <span class="inlinecode"><span class="id" title="var">specs</span></span> is a partial function from code addresses to specs.  Under the hood, <span class="inlinecode"><span class="id" title="var">interp</span></span> is implemented via an explicit natural deduction system for PropX.  This system is unusual in that <i>the impredicative quantifiers have introduction rules but no elimination rules</i>.  As a result, we may really only reason non-trivially about those quantifiers at the level of the meta-logic, which is Coq.  One consequence is that we cannot transparently and automatically translate uses of <span class="inlinecode"><span class="id" title="var">interp</span></span> into normal-looking Coq propositions.  However, this can be done for formulas that do not use implication.  A Bedrock tactic <span class="inlinecode"><span class="id" title="var">propxFo</span></span> handles that automated simplification, where it applies.
+
+<div class="paragraph"> </div>
+
+   The most commonly used Bedrock tactics are designed to hide the use of PropX where feasible, though sometimes details creep through.  It is important that we have this machinery around, to allow modular reasoning about programs with first-class code pointers.
+
+<div class="paragraph"> </div>
+
+   One further foundational point is worth making: while most separation logics outside of Coq build into their assertion languages such constructs as <span class="inlinecode">=*&gt;</span> and <span class="inlinecode">*</span>, with XCAP and related systems, we instead define these as derived operators, with definitions in terms of the basic PropX connectives. 
+<div class="paragraph"> </div>
+
+<a name="lab8"></a><h3 class="section">A Note on the Format of Invariants</h3>
+
+<div class="paragraph"> </div>
+
+ Recall the beginning of the <span class="inlinecode"><span class="id" title="var">While</span></span> loop from our last example:
+<br/>
+<span class="inlinecode">&nbsp;&nbsp;&nbsp;&nbsp;[<span class="id" title="var">Al</span> <span class="id" title="var">ls</span>, <span class="id" title="var">Al</span> <span class="id" title="var">accLs</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">PRE</span>[<span class="id" title="var">V</span>] <span class="id" title="var">sll</span> <span class="id" title="var">ls</span> (<span class="id" title="var">V</span> "x") * <span class="id" title="var">sll</span> <span class="id" title="var">accLs</span> (<span class="id" title="var">V</span> "acc")<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">POST</span>[<span class="id" title="var">R</span>] <span class="id" title="var">sll</span> (<span class="id" title="var">rev_append</span> <span class="id" title="var">ls</span> <span class="id" title="var">accLs</span>) <span class="id" title="var">R</span> ]<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">While</span> ("x" &lt;&gt; 0) {
+<div class="paragraph"> </div>
+
+</span>
+<div class="paragraph"> </div>
+
+The loop invariant is strange, since it includes both a <i>precondition</i> and a <i>postcondition</i>.  Standard Hoare-logic loop invariants only represent assertions over single program states.  How should an invariant like the above be interpreted?
+
+<div class="paragraph"> </div>
+
+One answer is to consider it a new notation in separation logic, as in a VSTTE 2010 paper by Thomas Tuerk.  One way to think of it is: an invariant's <i>precondition</i> describes what the machine state looks like upon entering a loop iteration, and the <i>postcondition</i> describes what the state must be transformed into before it is legal to <i>return</i> from the current function.
+
+<div class="paragraph"> </div>
+
+It also turns out that this idea of loop invariant is actually <i>more natural</i> for assembly language than the more common notation is.  It all has to do with the idea that assembly programs are naturally thought of as in <i>continuation-passing style</i>, since call stacks and return pointers are represented explicitly via memory and registers.  Thus, the natural idea of specification for a function is just a precondition, not a precondition plus a postcondition.
+
+<div class="paragraph"> </div>
+
+Using a more informal notation, the surface syntax for loop invariants could be written like:
+
+<div class="paragraph"> </div>
+
+<tt>forall x. {P} {Q}</tt>
+
+<div class="paragraph"> </div>
+
+There are both a precondition and a postcondition, potentially with both mentioning some variables quantified at the top level.  We desugar such invariants to underlying Bedrock IL specifications (preconditions) like so:
+
+<div class="paragraph"> </div>
+
+<tt>{exists x. P /\ {Q}Rp}</tt>
+
+<div class="paragraph"> </div>
+
+We use a <i>nested Hoare double</i>, writing {Q}<tt>Rp</tt> to assert that <i>register <tt>Rp</tt> holds a pointer to a code block whose precondition is compatible with <tt>Q</tt></i>.  That is, we mention the return pointer explicitly, rather than keeping it as implicit in our use of a postcondition.
+
+<div class="paragraph"> </div>
+
+Actually, to support separation logic reasoning, the desugaring is a bit more complex.  It is more accurate to write as:
+
+<div class="paragraph"> </div>
+
+<tt>{exists x, a. P * a /\ {Q * a}Rp}</tt>
+
+<div class="paragraph"> </div>
+
+We build the <i>frame rule</i> into the desugaring scheme.  Some piece of memory is described by an unknown predicate <tt>a</tt> on entry and must still be described by <tt>a</tt> on exit.
+
+<div class="paragraph"> </div>
+
+So there is a first-principles explanation of what Bedrock loop invariants mean.
+
+<div class="paragraph"> </div>
+
+This treatment of invariants is natural in continuation-passing style; implementing the conventional notation would actually require more work for the Bedrock authors.  However, the alternate notation is actually quite useful in concert with separation logic.  Invariants in this style can provide very effective hints on where the <i>frame rule</i> ought to be applied.
+
+<div class="paragraph"> </div>
+
+Specifically, suppose that the state upon entry to a loop is described by an invariant with precondition <span class="inlinecode"><span class="id" title="var">P</span></span> <span class="inlinecode">*</span> <span class="inlinecode"><span class="id" title="var">R</span></span> and postcondition <span class="inlinecode"><span class="id" title="var">Q</span></span> <span class="inlinecode">*</span> <span class="inlinecode"><span class="id" title="var">R</span></span>.  In other words, the loop will transform some state from satisfying <span class="inlinecode"><span class="id" title="var">P</span></span> into satisfying <span class="inlinecode"><span class="id" title="var">Q</span></span>, and there is some additional state satisfying <span class="inlinecode"><span class="id" title="var">R</span></span> that need not be touched.  In such a state, we can write a loop invariant with precondition based only on <span class="inlinecode"><span class="id" title="var">P</span></span> and postcondition based only on <span class="inlinecode"><span class="id" title="var">Q</span></span>.  We forget about <span class="inlinecode"><span class="id" title="var">R</span></span> for the rest of this function's verification.
+
+<div class="paragraph"> </div>
+
+Such a technique is very helpful in traversals of linked data structures.  For instance, consider a loop over the cells of a linked list.  Traditional separation logic requires a loop invariant that splits the full list into a prefix list segment that has already been visited and a suffix list that has not yet been visited.  In Bedrock, we can instead use a loop invariant that only mentions the unvisited suffix.  Automatic application of the frame rule lets us gradually hide list elements from the invariant as we visit them.
+
+<div class="paragraph"> </div>
+
+For a lengthier explanation of this pattern, see again Tuerk's VSTTE 2010 paper.
+
+<div class="paragraph"> </div>
+
+The next section gives an example program containing one invariant, which triggers a similar use of the frame rule, but for a function call rather than a loop.  That is, after the call, we no longer need to know about certain parts of memory, so we need not mention those parts in the invariant.  It may be a useful exercise to consider the invariant in light of the desugaring to continuation-passing style. 
+<div class="paragraph"> </div>
+
+<a name="lab9"></a><h2 class="section">The XCAP Program Logic</h2>
+
+<div class="paragraph"> </div>
+
+ Now we are finally ready to describe the end product of a Bedrock verification (though, as forewarned, we will stay fairly sketchy, since details abound in the Coq code).  A verified program is nothing more than a normal Bedrock IL program, where <i>each basic block is annotated with a PropX assertion</i>.  For the program to be truly verified, two conditions must be proved for each block <span class="inlinecode"><span class="id" title="var">b</span></span> with spec <span class="inlinecode"><span class="id" title="var">f</span></span>.  First, a <i>progress</i> condition says: for any initial state satisfying <span class="inlinecode"><span class="id" title="var">f</span></span>, if execution starts at the beginning of <span class="inlinecode"><span class="id" title="var">b</span></span>, then execution continues safely without getting stuck, at least until after the jump that ends <span class="inlinecode"><span class="id" title="var">b</span></span>.  Second, a <i>preservation</i> condition says: for any state satisfying <span class="inlinecode"><span class="id" title="var">f</span></span>, if execution starts at the beginning of <span class="inlinecode"><span class="id" title="var">b</span></span> and makes it safely to another block <span class="inlinecode"><span class="id" title="var">b'</span></span>, then <span class="inlinecode"><span class="id" title="var">b'</span></span> has some spec that is satisfied by the machine state at this point.
+
+<div class="paragraph"> </div>
+
+   The terms <i>progress</i> and <i>preservation</i> are chosen to evoke the <i>syntactic approach to type soundness</i>, which is based around a small-step operational semantics and an inductive invariant on reachable states: each state (program term) is well-typed, according to an inductively defined typing judgment.  In XCAP, we follow much the same approach, where a single small-step transition is <i>one basic block execution</i>, and the inductive invariant is that <i>the current machine state satisfies the spec of the current basic block</i>.
+
+<div class="paragraph"> </div>
+
+   Thus, adapting the almost trivial syntactic type soundness proof method, we arrive at some theorems about verified Bedrock programs.  First, if execution begins in a block whose spec is satisfied, then <i>execution continues forever without getting stuck</i>.  Second, if execution begins in a block whose spec is satisfied, then <i>every basic block's spec is satisfied whenever control enters that block</i>.  The first condition is a sort of <i>memory safety</i>, while the second is a kind of <i>functional correctness</i>.
+
+<div class="paragraph"> </div>
+
+   The <span class="inlinecode"><span class="id" title="var">moduleOk</span></span> theorems we established in the last section are actually about a higher-level notion, that of <i>structured programs</i> and what it means for them to be correct.  We defer details of structured programs to a later section.  For now, what matters is that structured programs can be <i>compiled</i> into verified Bedrock IL programs, at which point their code and the associated guarantees can be understood as in this section. 
+<div class="paragraph"> </div>
+
+<a name="lab10"></a><h1 class="section">Interactive Program Verification</h1>
+
+<div class="paragraph"> </div>
+
+ A central design point of Bedrock is to provide tactics to make the verification of individual programs be as automatic as possible.  Realistic programs involve many details, few of which are interesting, so why ask the programmer to account for them manually?  The programmer helps Bedrock by providing <i>hints</i> that can come in many varieties.  There are the normal <span class="inlinecode"><span class="id" title="tactic">auto</span></span> and <span class="inlinecode"><span class="id" title="tactic">autorewrite</span></span> hints familiar to most Coq users, but there are also new notions like <i>unfolding rules</i> and <i>symbolic evaluators</i>.  Bedrock verifications of serious programs will tend to use all of these notions in concert.
+
+<div class="paragraph"> </div>
+
+   Final proofs may be automated, but, during development, it is usually helpful to step through proofs incrementally.  Of course, this is a mode that Coq supports very well.  However, with Bedrock, there is no need to work at such fine granularity as is found in the average Coq proof script.  Instead, there is a small vocabulary of automation procedures that modify proof states in ways that a human can follow.
+
+<div class="paragraph"> </div>
+
+   The workhorse <span class="inlinecode"><span class="id" title="var">sep</span></span> tactic is essentially defined as the following:
+   <br/>
+<span class="inlinecode">&nbsp;&nbsp;&nbsp;<span class="id" title="keyword">Ltac</span> <span class="id" title="var">sep</span> <span class="id" title="var">hints</span> := <span class="id" title="var">post</span>; <span class="id" title="var">evaluate</span> <span class="id" title="var">hints</span>; <span class="id" title="var">descend</span>; <span class="id" title="tactic">repeat</span> (<span class="id" title="var">step</span> <span class="id" title="var">hints</span>; <span class="id" title="var">descend</span>).<br/>
+&nbsp;&nbsp;&nbsp;
+<div class="paragraph"> </div>
+
+</span>   The tactic is parameterized on <span class="inlinecode"><span class="id" title="var">hints</span></span>, which provides a set of abstract predicate unfolding rules.  There is a default hints package <span class="inlinecode"><span class="id" title="var">auto_ext</span></span>, and <span class="inlinecode"><span class="id" title="var">sep_auto</span></span> is defined as <span class="inlinecode"><span class="id" title="var">sep</span></span> <span class="inlinecode"><span class="id" title="var">auto_ext</span></span>.
+
+<div class="paragraph"> </div>
+
+   A few basic steps make up the <span class="inlinecode"><span class="id" title="var">sep</span></span> procedure.  First, <span class="inlinecode"><span class="id" title="var">post</span></span> does post-processing on the results of <span class="inlinecode"><span class="id" title="var">vcgen</span></span>'s verification condition generation, trying to eliminate as much explicit PropX notation as possible.  Next, <span class="inlinecode"><span class="id" title="var">evaluate</span></span> implements <i>symbolic execution</i>, modifying a block's precondition to reflect the effects of a piece of straightline code, possibly including the equivalents of assume statements to record the results of conditionals.  The <span class="inlinecode"><span class="id" title="var">descend</span></span> tactic is a generic simplifier; among other steps, it descends under existential quantifiers and conjunctions in the conclusion, introducing new unification variables for the quantifiers.  The rest of the procedure is a loop over <span class="inlinecode"><span class="id" title="var">step</span></span> and <span class="inlinecode"><span class="id" title="var">descend</span></span>, where the former implements a variety of basic steps in a Bedrock proof.
+
+<div class="paragraph"> </div>
+
+   It is probably easiest to illustrate the basic steps by example.  To make things interesting, consider this function which calls our earlier swap function.  In filling out the new <span class="inlinecode"><span class="id" title="var">reserving</span></span> clause, we keep in mind that the new function will call <span class="inlinecode">&quot;<span class="id" title="var">swap</span>&quot;</span>, and we plan not to use any private local variables.  Therefore, the only reserved stack space that we need is that for the function call, computed by this recipe: one slot for each function argument, plus one for a saved return pointer, plus the callee's number of reserved stack slots.  The notation <span class="inlinecode"><span class="id" title="var">p</span></span> <span class="inlinecode">=?&gt;</span> <span class="inlinecode"><span class="id" title="var">n</span></span> indicates an allocated memory region of unknown contents, beginning at <span class="inlinecode"><span class="id" title="var">p</span></span> and spanning <span class="inlinecode"><span class="id" title="var">n</span></span> words. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Definition</span> <span class="id" title="var">sillyS</span> := <span class="id" title="var">SPEC</span>("p", "q") <span class="id" title="var">reserving</span> 5<br/>
+&nbsp;&nbsp;<span class="id" title="var">PRE</span>[<span class="id" title="var">V</span>] <span class="id" title="var">V</span> "p" =?&gt; 1 * <span class="id" title="var">V</span> "q" =?&gt; 1<br/>
+&nbsp;&nbsp;<span class="id" title="var">POST</span>[<span class="id" title="var">R</span>] [| <span class="id" title="var">R</span> = 3 |] * <span class="id" title="var">V</span> "p" =?&gt; 1 * <span class="id" title="var">V</span> "q" =?&gt; 1.<br/>
+
+<br/>
+
+<br/>
+<span class="id" title="keyword">Definition</span> <span class="id" title="var">sillyM</span> := <span class="id" title="var">bimport</span> [[ "swap"!"swap" @ [<span class="id" title="var">swapS</span>] ]]<br/>
+  <span class="id" title="var">bmodule</span> "silly" {{<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">bfunction</span> "main"("p", "q") [<span class="id" title="var">sillyS</span>]<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"p" *&lt;- 3;;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"q" *&lt;- 8;;<br/>
+<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">Call</span> "swap"!"swap"("p", "q")<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[ <span class="id" title="var">Al</span> <span class="id" title="var">v</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">PRE</span>[<span class="id" title="var">V</span>] <span class="id" title="var">V</span> "q" =*&gt; <span class="id" title="var">v</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">POST</span>[<span class="id" title="var">R</span>] [| <span class="id" title="var">R</span> = <span class="id" title="var">v</span> |] * <span class="id" title="var">V</span> "q" =*&gt; <span class="id" title="var">v</span> ];;<br/>
+<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"q" &lt;-* "q";;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="var">Return</span> "q"<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id" title="keyword">end</span><br/>
+&nbsp;&nbsp;}}.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+We use the <span class="inlinecode"><span class="id" title="var">Call</span></span> notation, which always requires an invariant afterward.  That invariant position is often a convenient place to simplify the state that we are tracking.  The invariant above is an example: we <i>forget about the pointer <span class="inlinecode"><span class="id" title="var">p</span></span></i>, remembering only <span class="inlinecode"><span class="id" title="var">q</span></span>, since the rest of the function only touches <span class="inlinecode"><span class="id" title="var">q</span></span>.  Bedrock's tactics automatically justify this state reduction, with a reasoning pattern reminiscent of separation logic's <i>frame rule</i>.  That pattern and many others are encapsulated in the definition of <span class="inlinecode"><span class="id" title="var">step</span></span>.
+
+<div class="paragraph"> </div>
+
+   To demonstrate the recommended interactive verification approach, we will step through a more manual proof of the most challenging verification condition, the one associated with the <span class="inlinecode"><span class="id" title="var">Call</span></span> command.  Interested readers may step through this proof script in Coq, so we will not dump the gory details of subgoal structure into this tutorial.  Instead, we give a high-level account of what each subgoal means and how it is dealt with. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Theorem</span> <span class="id" title="var">sillyMOk</span> : <span class="id" title="var">moduleOk</span> <span class="id" title="var">sillyM</span>.<br/>
+<span class="id" title="keyword">Proof</span>.<br/>
+&nbsp;&nbsp;<span class="id" title="var">vcgen</span>.<br/>
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">Focus</span> 5.<br/>
+</div>
+
+<div class="doc">
+This is the subgoal for the function call.  We always begin with post-processing the verification condition. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">post</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+Next, we need to execute the instructions of the prior basic block symbolically, to reflect their effects in the predicate that characterizes the current machine state. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">evaluate</span> <span class="id" title="var">auto_ext</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+At this point, we are staring at the spec of <span class="inlinecode">&quot;<span class="id" title="var">swap</span>&quot;</span>, which begins with some existential quantifiers and conjunctions.  One of the conjuncts comes from a use of the <span class="inlinecode">@@</span> derived PropX operator, to express the postcondition via a fact about the return pointer we pass to <span class="inlinecode">&quot;<span class="id" title="var">swap</span>&quot;</span>.  We call <span class="inlinecode"><span class="id" title="var">descend</span></span> to peel away the quantifiers and conjunctions, leaving the conjuncts as distinct subgoals. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">descend</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+This subgoal is the precondition we gave for <span class="inlinecode">&quot;<span class="id" title="var">swap</span>&quot;</span>, with an extra fact added to characterize the stack contents in terms of values of local variables.  There are unification variables in positions that were previously existentially quantified.  This sort of goal is just what <span class="inlinecode"><span class="id" title="var">step</span></span> is designed for. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">step</span> <span class="id" title="var">auto_ext</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+We are thrown back another goal, this time stated as an implication between separation logic assertions.  One of the unification variables has been replaced with a known substitution for local variable values, which will enable <span class="inlinecode"><span class="id" title="var">step</span></span> to discharge the subgoal completely this time. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">step</span> <span class="id" title="var">auto_ext</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+Here is an easy subgoal.  It asks us to find a spec for the return pointer we pass in the function call, and exactly such a fact was given to us by <span class="inlinecode"><span class="id" title="var">vcgen</span></span>. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">step</span> <span class="id" title="var">auto_ext</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+We have finished proving the precondition of <span class="inlinecode">&quot;<span class="id" title="var">swap</span>&quot;</span>.  Now we must prove that its postcondition implies the invariant we wrote after the function call.  The form of the obligation is an implication within PropX, where the antecedent is the postcondition of <span class="inlinecode">&quot;<span class="id" title="var">swap</span>&quot;</span> and the consequent is the invariant we wrote after the call.  Recall that simplifying PropX implications into normal-looking Coq formulas is difficult.  However, we can rely on <span class="inlinecode"><span class="id" title="var">step</span></span> to simplify the implication into some more basic subgoals, some of which will still be PropX implications. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">descend</span>; <span class="id" title="var">step</span> <span class="id" title="var">auto_ext</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+The first resulting subgoal is an implication between the postcondition of <span class="inlinecode">&quot;<span class="id" title="var">swap</span>&quot;</span> and the <span class="inlinecode"><span class="id" title="var">PRE</span></span> clause from the post-call invariant.  Again, this is exactly the sort of separation logic simplification that <span class="inlinecode"><span class="id" title="var">step</span></span> handles predictably. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">step</span> <span class="id" title="var">auto_ext</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+Now we are asked to find a specification for the original return pointer passed to <span class="inlinecode">&quot;<span class="id" title="var">main</span>&quot;</span>.  Again, <span class="inlinecode"><span class="id" title="var">vcgen</span></span> left us a matching hypothesis. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">step</span> <span class="id" title="var">auto_ext</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+We are in the home stretch now!  The single subgoal asks us to prove an implication <span class="inlinecode"><span class="id" title="var">P</span></span> <span class="inlinecode">---&gt;</span> <span class="inlinecode"><span class="id" title="var">Q</span></span> <span class="inlinecode">---&gt;</span> <span class="inlinecode"><span class="id" title="var">R</span></span>, where <span class="inlinecode"><span class="id" title="var">P</span></span> is the <span class="inlinecode"><span class="id" title="var">POST</span></span> clause of the post-call invariant, <span class="inlinecode"><span class="id" title="var">Q</span></span> is the postcondition of <span class="inlinecode">&quot;<span class="id" title="var">swap</span>&quot;</span>, and <span class="inlinecode"><span class="id" title="var">R</span></span> is the literal specification of the original return pointer for <span class="inlinecode">&quot;<span class="id" title="var">main</span>&quot;</span>.  In fact, <span class="inlinecode"><span class="id" title="var">R</span></span> is an application of a second-order variable to the current machine state. We also have a hypothesis telling us that <span class="inlinecode"><span class="id" title="var">R</span></span> is implied by the postcondition we originally ascribed to <span class="inlinecode">&quot;<span class="id" title="var">main</span>&quot;</span> in its spec.
+
+<div class="paragraph"> </div>
+
+     Our first step is to reduce the implication to just <span class="inlinecode"><span class="id" title="var">P</span></span> <span class="inlinecode">---&gt;</span> <span class="inlinecode"><span class="id" title="var">R</span></span>, augmented with extra <i>pure</i> (memory-independent) hypotheses that we glean from <span class="inlinecode"><span class="id" title="var">Q</span></span>.  The intuition behind this step is that we already incorporated in <span class="inlinecode"><span class="id" title="var">P</span></span> any facts about memory that we will need. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">descend</span>; <span class="id" title="var">step</span> <span class="id" title="var">auto_ext</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+Now we prove <span class="inlinecode"><span class="id" title="var">P</span></span> <span class="inlinecode">---&gt;</span> <span class="inlinecode"><span class="id" title="var">R</span></span> using the hypothesis mentioned above, which can be thought of as a quantified version of <span class="inlinecode"><span class="id" title="var">U</span></span> <span class="inlinecode">---&gt;</span> <span class="inlinecode"><span class="id" title="var">R</span></span>.  That means <span class="inlinecode"><span class="id" title="var">step</span></span> can help us by reducing the subgoal to <span class="inlinecode"><span class="id" title="var">P</span></span> <span class="inlinecode">---&gt;</span> <span class="inlinecode"><span class="id" title="var">U</span></span>. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">step</span> <span class="id" title="var">auto_ext</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+Here is another PropX implication, which we want to simplify to convert as much structure as possible into normal Coq propositions. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">step</span> <span class="id" title="var">auto_ext</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+The first of two new subgoals is an equality between the current stack pointer and the value that the spec of <span class="inlinecode">&quot;<span class="id" title="var">main</span>&quot;</span> says it should have.  We call a library tactic for proving equalities between bitvector expressions. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">words</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+The last subgoal is an implication between the <span class="inlinecode"><span class="id" title="var">POST</span></span> clause of the post-call invariant and the overall postcondition of <span class="inlinecode">&quot;<span class="id" title="var">main</span>&quot;</span>.  This is just a separation logic implication, so we make short work of it. 
+</div>
+<div class="code">
+
+<br/>
+&nbsp;&nbsp;<span class="id" title="var">step</span> <span class="id" title="var">auto_ext</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+This concludes our proof of the most interesting verification condition.  Let's back up to the high level and prove the whole theorem automatically. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Abort</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+A manual exploration like the above is about learning which hints will be important in proving the theorem.  One might even do this exploration using more usual manual Coq proofs.  In the end, we distill what we've learned into hint commands.  In the script above, we saw only one place where <span class="inlinecode"><span class="id" title="var">sep</span></span> wouldn't be sufficient, and that was an equality between machine words.  Therefore, we register a hint for such cases. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Hint Extern</span> 1 (@<span class="id" title="var">eq</span> <span class="id" title="var">W</span> <span class="id" title="var">_</span> <span class="id" title="var">_</span>) =&gt; <span class="id" title="var">words</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+Now it is easy to prove the theorem automatically. 
+</div>
+<div class="code">
+
+<br/>
+<span class="id" title="keyword">Theorem</span> <span class="id" title="var">sillyMOk</span> : <span class="id" title="var">moduleOk</span> <span class="id" title="var">sillyM</span>.<br/>
+<span class="id" title="keyword">Proof</span>.<br/>
+&nbsp;&nbsp;<span class="id" title="var">vcgen</span>; (<span class="id" title="var">sep_auto</span>; <span class="id" title="tactic">auto</span>).<br/>
+<span class="id" title="keyword">Qed</span>.<br/>
+
+<br/>
+</div>
+
+<div class="doc">
+We might even make small changes to the program specification or implementation, and often a proof script like the above will continue working. 
+<div class="paragraph"> </div>
+
+<a name="lab11"></a><h1 class="section">More</h1>
+
+<div class="paragraph"> </div>
+
+ This tutorial will likely grow some more sections later.  One topic worth adding is Bedrock's <i>structured programming system</i>, which includes support for extending the visible programming language with new control flow constructs, when they are accompanied by appropriate proofs. 
+</div>
+<div class="code">
+</div>
+</div>
+
+<div id="footer">
+<hr/><a href="index.html">Index</a><hr/>This page has been generated by <a href="http://coq.inria.fr/">coqdoc</a>
+</div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,31 @@
+
+
+Inductive T : Set :=
+ | True  : T
+ | False : T
+ | IFB : T -> T -> T -> T.
+
+Fixpoint onestep (t : T) : T :=
+  match t with
+  | IFB True  t2 t3 => t2
+  | IFB False t2 t3 => t3
+  | IFB (IFB t1 t2 t3) t4 t5 =>
+      IFB (IFB (onestep t1) t2 t3) t4 t5
+  | t => t
+  end.
+
+Inductive onestep_R : T -> T -> Prop :=
+  | E_IfTrue (t2 t3 : T) : onestep_R (IFB True t2 t3) t2
+  | E_IfFalse (t2 t3 : T) : onestep_R (IFB False t2 t3) t3
+  | E_If (t1 t1' t2 t3 : T) : onestep_R t1 t1' -> onestep_R (IFB t1 t2 t3) (IFB t1' t2 t3).
+
+Notation "A --> B" := (onestep_R A B)(at level 60).
+
+Theorem Determinancy_One_Step : forall t t' t'', t --> t' /\ t' --> t'' -> t --> t''.
+Proof. intros. destruct H. induction H. Admitted.
+
+  
+          
+
+
+      

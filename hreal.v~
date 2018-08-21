@@ -1,0 +1,217 @@
+
+Require Import Reals Ensembles Streams Extraction.
+
+
+Extraction Language Haskell.
+Set Extraction AutoInline.
+Set Extraction Optimize.
+Set Extraction AccessOpaque.
+
+Set Implicit Arguments.
+
+(* R *)
+
+Extract Constant R => "Data.Word8". 
+  
+Variable HR : Stream R.
+Extract Constant HR => "Data.ByteString.Lazy".
+Delimit Scope HR_scope with HR.
+Open Scope HR_scope.
+Extraction HR.
+
+Variable HR0 : Stream R.
+Extract Constant HR0 => "Data.ByteString.Lazy.repeat 0".
+Extraction HR0.
+
+Extract Inlined Constant HR1 => "Data.ByteString.Lazy.repeat 1".
+Parameter HRplus : HR -> HR -> HR.
+Extract Inlined Constant HRplus => "Data.ByteString.Lazy.zipWith (+)".
+Parameter HRmult : HR -> HR -> HR.
+Extract Inlined Constant HRplus => "Data.ByteString.Lazy.zipWith (*)".
+Parameter HRopp : HR -> HR.
+Extract Inlined Constant HRopp => "Data.ByteString.Lazy.map (-1)".
+Parameter HRlt : HR -> HR -> Prop.
+Parameter HRinv : HR -> HR.
+
+
+Infix "+" := HRplus : HR_scope.
+Infix "*" := HRmult : HR_scope.
+Notation "- x" := (HRopp x) : HR_scope.
+Notation "/ x" := (HRinv x) : HR_scope.
+Extraction 
+Infix "<" := HRlt : HR_scope.
+
+Definition HRgt (r1 r2 : HR) : Prop := r2 < r1.
+Definition HRle (r1 r2 : HR) : Prop := r1 < r2 \/ r1 = r2.
+Definition HRge (r1 r2 : HR) : Prop := HRgt r1 r2 \/ r1 = r2.
+Definition HRminus (r1 r2 : HR) : HR := r1 + - r2.
+Definition HRdiv (r1 r2 : HR) : HR := r1 * / r2.
+
+Infix "-" := HRminus : HR_scope.
+Infix "/" := HRdiv : HR_scope.
+
+Infix "<=" := HRle : HR_scope.
+Infix ">=" := HRge : HR_scope.
+Infix ">" := HRgt : HR_scope.
+
+Notation "x <= y <= z" := (x <= y /\ y <= z) : HR_scope.
+Notation "x <= y < z" := (x <= y /\ y < z) : HR_scope.
+Notation "x < y < z" := (x < y /\ y < z) : HR_scope.
+Notation "x < y <= z" := (x < y /\ y <= z) : HR_scope.
+Extraction (HR0 + HR0).
+
+
+
+Section Families.
+Variable T : Type.
+Definition Family := Ensemble (Ensemble T).
+End Families.
+
+Definition In {A : Type} := @In A.
+Definition Intersection {A : Type} := @Intersection A.
+Definition Included {A : Type} := @Included A.
+Definition Full_set {A : Type} := @Full_set A.
+Definition Empty_set {A : Type} := @Empty_set A.
+
+Record Filter (X:Type) : Type := {
+  filter_family: Family X;
+  filter_intersection: forall S1 S2:Ensemble X,
+    In filter_family S1 -> In filter_family S2 ->
+    In filter_family (Intersection S1 S2);
+  filter_upward_closed: forall S1 S2:Ensemble X,
+    In filter_family S1 -> Included S1 S2 ->
+    In filter_family S2;
+  filter_full: In filter_family Full_set;
+  filter_empty: ~ In filter_family Empty_set;
+  (* ultrafilter *)
+  ultra_filter : forall S:Ensemble X, In (filter_family) S \/
+    In (filter_family) (Ensembles.Complement X S)
+}.
+Arguments filter_family [X].
+
+Record filter_basis {X:Type} (F:Filter X) (B:Family X) : Prop := {
+  filter_basis_elements: Included B (filter_family F);
+  filter_basis_cond: forall S:Ensemble X,
+    In (filter_family F) S -> exists S':Ensemble X,
+    In B S' /\ Included S' S
+}.
+
+Definition ultrafilter {X:Type} (F:Filter X) : Prop :=
+  forall S:Ensemble X, In (filter_family F) S \/
+  In (filter_family F) (Ensembles.Complement X S).
+
+
+Variable filter : Filter nat.
+Variable uf : ultrafilter filter.
+
+Definition hreal := Stream R.
+Open Scope HR_scope.
+
+Definition heq_subset_EqSt (x y : hreal)  :=
+  sig (fun i : nat => EqSt (Str_nth_tl i x) (Str_nth_tl i y)).
+
+
+Definition heq_subset (x y : hreal) : Ensemble nat :=
+  sig (fun i : nat => Str_nth i x = Str_nth i y).
+
+Definition heq (x y : hreal) : Prop :=
+  In (filter_family filter) (heq_subset x y).
+Hint Unfold heq.
+
+Lemma heq_subset_inc : forall x y, Included (heq_subset x y) (@Full_set nat).
+  intros; unfold Included. unfold Ensembles.Included. intros.
+  apply Full_intro. Defined.
+Lemma heq_subset_dec_refl : forall x, Included (@Full_set nat) (heq_subset x x).
+  intros. unfold heq_subset. unfold Included. unfold Ensembles.Included.
+  intros. unfold Ensembles.In. reflexivity. Defined.
+Lemma heq_refl_eq_same : forall x, Same_set nat (@Full_set nat) (heq_subset x x).
+  intros. unfold Same_set. split.
+  + apply heq_subset_dec_refl.
+  + apply heq_subset_inc. Defined.
+Lemma heq_refl_eq : forall x, (@Full_set nat) = (heq_subset x x).
+  intros. apply Extensionality_Ensembles. apply heq_refl_eq_same. Defined.
+
+Lemma heq_subset_sym_same : forall x y, Same_set nat (heq_subset x y) (heq_subset y x).
+  intros. unfold heq_subset. unfold Same_set. split.
+  + unfold Ensembles.Included. unfold Ensembles.In. intros.
+    symmetry. apply H.
+  + unfold Ensembles.Included. unfold Ensembles.In. intros.
+    symmetry. apply H. Defined.
+Lemma heq_subset_sym : forall x y, heq_subset x y = heq_subset y x.
+  intros. apply Extensionality_Ensembles. apply heq_subset_sym_same. Defined.
+
+Theorem heq_refl : forall x, heq x x.
+  intros.
+  unfold heq.
+  apply filter_upward_closed with (S1 := (@Full_set nat)).
+  + apply filter_full.
+  + apply heq_subset_dec_refl.
+Defined.
+
+Theorem heq_sym : forall x1 x2, heq x1 x2 -> heq x2 x1.
+  intros.
+  unfold heq in *. rewrite heq_subset_sym in H. apply H. Defined.
+
+Lemma heq_subset_max : forall x1 x2, Included (heq_subset x1 x2) (heq_subset x1 x1).
+  intros. rewrite <- heq_refl_eq. unfold Included.
+  unfold Ensembles.Included. intros. apply Full_intro. Defined.
+
+Lemma disjoint_comp_inc {X : Type} : forall S1, Included (Intersection (Complement X S1) S1)
+(@Empty_set X).
+  intros S1. unfold Intersection. unfold Complement. unfold Ensembles.In. 
+  unfold Included. unfold Ensembles.Included. unfold Ensembles.In. intros.
+  inversion H. unfold Ensembles.In in *. contradiction. Defined.
+
+Lemma disjoint_comp {X : Type} : forall S1, @Empty_set X = (Intersection (Complement X S1) S1).
+  intros. apply Extensionality_Ensembles. split. unfold Ensembles.Included.
+  intros. inversion H. apply disjoint_comp_inc. Defined.
+  
+Theorem filter_complement {X : Type} : forall f1 S1,
+    In (filter_family f1) S1  -> ~ In (filter_family f1) (Complement X S1).
+  intros. unfold not. intros. apply (filter_intersection f1 (Complement X S1) S1) in H.
+  rewrite <- disjoint_comp in H. apply filter_empty in H. inversion H. apply H0. Defined.
+
+Definition Peq (x1 x2 : hreal) : Ensemble nat := (fun i : nat => Str_nth i x1 = Str_nth i x2).
+Theorem heq_trans : forall x1 x2 x3, heq x1 x2 -> heq x2 x3 -> heq x1 x3.
+ intros. unfold heq in *. unfold In in *. unfold Ensembles.In in *.
+ unfold heq_subset in *.
+ apply filter_intersection with
+     (S1 := Peq x1 x2) in H0 as EE.
+ assert (E : Included
+               (Intersection (Peq x1 x2) (Peq x2 x3)) (Peq x1 x3)). {
+   unfold Included. unfold Ensembles.Included. unfold Ensembles.In.
+   intros. inversion H1. unfold Ensembles.In in *. inversion H2. inversion H3.
+   rewrite <- H6 in H7. apply H7. }
+ apply filter_upward_closed with (S1 := (Intersection (Peq x1 x2) (Peq x2 x3))).
+ apply EE. apply E. apply H. Defined.
+
+Definition hequiv_class (y : hreal) : Ensemble hreal := fun (x : hreal) => heq x y.
+
+Theorem 
+
+
+
+ (*
+Definition heq_subset_EqSt (x y : hreal)  :=
+  (fun i : nat => EqSt (Str_nth_tl i x) (Str_nth_tl i y)).
+
+Record Filter (X:Type) : Type := {
+  filter_family: Family X;
+  filter_intersection: forall S1 S2:Ensemble X,
+    In filter_family S1 -> In filter_family S2 ->
+    In filter_family (Intersection S1 S2);
+  filter_upward_closed: forall S1 S2:Ensemble X,
+    In filter_family S1 -> Included S1 S2 ->
+    In filter_family S2;
+  filter_full: In filter_family Full_set;
+  filter_empty: ~ In filter_family Empty_set
+  ultra_filter : forall S:Ensemble X, In (filter_family) S \/
+    In (filter_family) (Ensembles.Complement X S)
+
+}.
+*)  
+
+    
+
+
+

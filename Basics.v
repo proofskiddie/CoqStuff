@@ -1,0 +1,528 @@
+Inductive day : Type :=
+  | monday : day
+  | tuesday : day
+  | wednesday : day
+  | thursday : day
+  | friday : day
+  | saturday : day
+  | sunday : day.
+
+Definition next_weekday (d:day) : day :=
+  match d with
+  | monday => tuesday
+  | tuesday => wednesday
+  | wednesday => thursday
+  | thursday => friday
+  | friday => monday
+  | saturday => monday
+  | sunday => monday
+  end.
+
+Compute (next_weekday friday).
+Compute (next_weekday (next_weekday saturday)).
+
+Example test_next_weekday:
+  (next_weekday (next_weekday saturday)) = tuesday.
+
+Proof. simpl. reflexivity. Qed. 
+
+Inductive bool : Type :=
+  | true : bool
+  | false : bool.
+
+Definition negb (b:bool) : bool :=
+  match b with
+  | true => false
+  | false => true
+  end.
+
+Definition andb (b1:bool) (b2:bool) : bool :=
+  match b1 with
+  | true => b2
+  | false => false
+  end.
+
+Definition orb (b1:bool) (b2:bool) : bool :=
+  match b1 with
+  | true => true
+  | false => b2
+  end.
+
+Definition nandb (b1:bool) (b2:bool) : bool :=
+  match b1 with
+  | true => 
+    match b2 with
+    | true => false
+    | false => true
+    end
+  | false => true
+  end.
+
+Definition andb3 (b1:bool) (b2:bool) (b3:bool) : bool :=
+  match b1 with
+  | true => 
+    match b2 with
+    | true => 
+      match b3 with
+        | true => true
+        | false => false
+      end
+    | false => false
+    end
+  | false => false
+  end.
+
+Example test_nandb1: (nandb true false) = true.
+Proof. simpl. reflexivity. Qed.
+Example test_nandb2: (nandb false false) = true.
+Proof. simpl. reflexivity. Qed.
+Example test_nandb3: (nandb false true) = true.
+Proof. simpl. reflexivity. Qed.
+Example test_nandb4: (nandb true true) = false.
+Proof. simpl. reflexivity. Qed.
+
+Example test_andb31: (andb3 true true true) = true.
+Proof. simpl. reflexivity. Qed.
+Example test_andb32: (andb3 false true true) = false.
+Proof. simpl. reflexivity. Qed.
+Example test_andb33: (andb3 true false true) = false.
+Proof. simpl. reflexivity. Qed.
+Example test_andb34: (andb3 true true false) = false.
+Proof. simpl. reflexivity. Qed.
+
+Compute (negb true).
+Compute (andb true false).
+
+Example test_orbff: (orb false false) = false.
+Proof. simpl. reflexivity. Qed.
+Example test_orbft: (orb false true) = true.
+Proof. simpl. reflexivity. Qed.
+Example test_orbtf: (orb true false) = true.
+Proof. simpl. reflexivity. Qed.
+Example test_orbtt: (orb true true) = true.
+Proof. simpl. reflexivity. Qed.
+
+Infix "&&" := andb.
+Infix "||" := orb.
+
+Example infixor: true || true || false = true.
+Proof. simpl. reflexivity. Qed.
+Example infixand: true && true && false = false.
+Proof. simpl. reflexivity. Qed.
+
+Check true.
+Check (negb true).
+Check negb.
+Check andb.
+
+Module NatPlayground.
+  Inductive nat : Type :=
+  | O : nat
+  | S : nat -> nat.
+
+  Definition pred (n : nat) : nat :=
+    match n with
+    | O => O
+    | S n' => n'
+    end.
+End NatPlayground.
+
+Definition minustwo (n : nat) : nat :=
+  match n with
+  | O => O
+  | S O => O
+  | S (S n') => n'
+  end.
+
+Fixpoint evenb (n : nat) : bool :=
+  match n with
+  | O => true
+  | S O => false
+  | S (S n') => evenb n'
+  end.
+
+Definition oddb (n : nat) : bool :=
+  negb (evenb n).
+
+Fixpoint plus (n1 : nat) (n2 : nat) : nat :=
+  match n1 with
+  | O => n2
+  | S n' =>  S (plus n' n2)
+  end. 
+
+Fixpoint mul (n m : nat) : nat :=
+  match n with
+  | O => O
+  | S n' => plus m (mul n' m) 
+  end.
+
+Fixpoint minus (n m : nat) : nat :=
+  match n, m with
+  | O, _ => O
+  | S n', O => S n'
+  | S n', S m' => minus n' m'
+  end.
+
+Example mul33: (mul (S O) (S (S O))) = (S (S O)).
+Proof. simpl. reflexivity. Qed.
+Example minus73: (minus 7 3) = 4.
+Proof. simpl. reflexivity. Qed.
+Compute (plus 2 3).
+Compute (oddb 11).
+Compute (evenb 11).
+Compute (minustwo (S (S (S O)))).
+Compute (minustwo 9).
+
+Fixpoint exp (a b : nat) : nat :=
+  match b with
+  | O => S O
+  | S p' => mul (exp a p') a
+  end.
+
+Compute (exp 2 4).
+
+Fixpoint factorial (n:nat) : nat :=
+  match n with
+  | O => S O
+  | S n' => mul (factorial n') n
+  end.
+
+Example test_factorial1: (factorial 3) = 6.
+Proof. simpl. reflexivity. Qed.
+Example test_factorial2: (factorial 5) = (mult 10 12).
+Proof. simpl. reflexivity. Qed.
+
+Notation "x + y" := (plus x y)
+(at level 50, left associativity) : nat_scope.
+Notation "x - y" := (minus x y)
+(at level 50, left associativity) : nat_scope.
+Notation "x * y" := (mul x y)
+(at level 40, left associativity) : nat_scope.
+
+Check ((0 + 1) + 1).
+
+Fixpoint beq_nat (n m : nat) : bool :=
+  match n, m with 
+  | O, O => true
+  | S n', S m' => beq_nat n' m'
+  | _, _ => false
+  end.
+
+Example beq_nat11: (beq_nat 1 1) = true.
+Proof. simpl. reflexivity. Qed.
+Example beq_nat10099: (beq_nat 100 99) = false.
+Proof. simpl. reflexivity. Qed.
+
+Fixpoint leb (n m : nat) : bool :=
+  match n, m with 
+  | O, _ => true
+  | _ , O => false
+  | S n', S m' => leb n' m'
+  end.
+
+Example leb12: (leb 1 2) = true.
+Proof. simpl. reflexivity. Qed.
+Example leb21: (leb 2 1) = false.
+Proof. simpl. reflexivity. Qed.
+Example test_leb1: (leb 2 2) = true.
+Proof. simpl. reflexivity. Qed.
+Example test_leb2: (leb 2 4) = true.
+Proof. simpl. reflexivity. Qed.
+Example test_leb3: (leb 4 2) = false.
+Proof. simpl. reflexivity. Qed.
+
+Definition blt_nat (n m : nat) : bool :=
+  (leb n m) && (negb (beq_nat n m)).
+
+Example test_blt_nat1: (blt_nat 2 2) = false.
+Proof. simpl. reflexivity. Qed.
+Example test_blt_nat2: (blt_nat 2 4) = true.
+Proof. simpl. reflexivity. Qed.
+Example test_blt_nat3: (blt_nat 4 2) = false.
+Proof. simpl. reflexivity. Qed.
+
+
+
+Theorem plus_1_1 : forall n:nat, 1 + n = S n.
+Proof.
+  intros n. simpl. reflexivity. Qed.
+
+Theorem plus_O_n : forall n : nat, 0 + n = n.
+Proof.
+  intros n. simpl. reflexivity. Qed.
+
+Theorem mult_O_1 : forall n : nat, 0 * n = 0.
+Proof.
+  intros n. simpl. reflexivity. Qed.
+
+Theorem plus_n_O : forall n, n = n + O.
+Proof.
+  intros n. simpl. Abort.
+
+Theorem plus_id_example : forall n m : nat,
+  n = m ->
+  n + n = m + m.
+Proof.
+  intros n m. intros H. rewrite <- H. reflexivity. Qed.
+
+Theorem plus_id_excercise : forall n m : nat, 
+  n = m -> m = O -> n + m = m + O.
+Proof.
+  intros n m.
+  intros H.
+  intros P.
+  rewrite -> H.
+  rewrite -> P.
+  reflexivity.
+Qed.
+
+Theorem  mult_O_plus : forall n m : nat,
+  (O + n) * m = n * m.
+Proof.
+  intros n m.
+  rewrite -> plus_O_n.
+  reflexivity.
+Qed.
+
+Theorem mult_S_1 : forall n m : nat,
+  m = S n ->
+  m * (1 + n) = m * m.
+Proof.
+  intros n m.
+  intros H.
+  rewrite -> plus_1_1.
+  rewrite -> H.
+  reflexivity.
+Qed.
+
+Theorem plus_1_neq_O : forall n : nat,
+  beq_nat (n + 1) 0 = false.
+Proof.
+  intros [| n'].
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+Theorem negb_involutive : forall b : bool,
+  negb (negb b) = b.
+Proof.
+  intros b. destruct b.
+  - reflexivity.
+  - reflexivity. Qed.
+
+Theorem andb_commutative : forall b c,
+  andb b c = andb c b.
+Proof.
+  intros b c. destruct b.
+  - destruct c.
+    + reflexivity.
+    + reflexivity.
+  - destruct c.
+    + reflexivity.
+    + reflexivity.
+Qed.
+
+Theorem andb_exchange : forall a b c,
+  andb (andb a b) c = andb (andb a c) b .
+Proof.
+  intros a b c. destruct a.
+  - destruct b.
+    { destruct c.
+      - reflexivity.
+      - reflexivity. }
+    { destruct c.
+      - reflexivity.
+      - reflexivity. }
+  - destruct b.
+    { destruct c.
+      - reflexivity.
+      - reflexivity. }
+    { destruct c.
+      - reflexivity.
+      - reflexivity. }
+Qed.
+
+Theorem andb_communtative'' : forall a b,
+  a && b = b && a.
+Proof.
+  intros [] [].
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+Theorem andb_true_elim1 : forall b c : bool,
+  andb b c = true -> b = true.
+Proof.
+  intros [] [].
+  - reflexivity.
+  - simpl. intros H. 
+    reflexivity.
+  - simpl. intros H. rewrite -> H. reflexivity.
+  - simpl. intros H. rewrite -> H. reflexivity.
+Qed.
+
+Theorem andb_true_elim2 : forall b c : bool,
+  andb b c = true -> c = true.
+Proof.
+  intros [] [].
+  - reflexivity.
+  - simpl. intros H. 
+    rewrite -> H. reflexivity.
+  - simpl. reflexivity.
+  - simpl. intros H. rewrite -> H. reflexivity.
+Qed.
+
+Theorem zero_nbeq_plus_1 : forall n : nat,
+  beq_nat 0 (n + 1) = false.
+Proof.
+  intros [| n'].
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+Theorem identity_fn_applied_twice : 
+  forall (f : bool -> bool),
+  (forall (x: bool), f x = x) ->
+  forall (b : bool), f (f b) = b.
+Proof.
+  intros f H b. rewrite -> H. rewrite -> H. reflexivity.
+Qed.
+
+Theorem negation_fn_applied_twice :
+  forall (f : bool -> bool),
+  (forall (x: bool), f x = negb x) ->
+  forall (b : bool), f (f b) = b.
+Proof.
+  intros f H b. rewrite -> H. rewrite -> H.
+  rewrite -> negb_involutive. reflexivity.
+Qed.
+
+Theorem andb_eq_orb : 
+  forall (b c : bool),
+  (andb b c = orb b c) ->
+  b = c.
+Proof.
+  intros [] []. 
+  - reflexivity.
+  - simpl. intros H. rewrite -> H. reflexivity.
+  - simpl. intros H. rewrite -> H. reflexivity.
+  - reflexivity.
+Qed.
+
+Inductive bin : Type := 
+  | O : bin
+  | T2 : bin -> bin
+  | P1 : bin -> bin.
+
+
+
+Fixpoint incr (b : bin) : bin :=
+  match b with
+  | O => P1 (T2 O)
+  | T2 n' => 
+    match n' with
+    | O => P1 (T2 O)
+    | P1 m => P1 (T2 (incr m))
+    | T2 m => P1 (T2 n')
+    end
+  | P1 n' => 
+    match n' with
+    | O => T2 (P1 (T2 O))
+    | P1 m => P1 (incr n')
+    | T2 m => T2 (incr m)
+    end
+  end.
+
+(* 
+1 + 2*(1 + m) = 1 + 2*(incr m)
+1 + 2*2*m 
+1 + 1 + 1 + m = 1 + incr(m + 1)
+1 + 1 + 2*m = 2*(1 + m)
+*)
+
+Fixpoint bin_to_nat (b : bin) : nat :=
+  match b with
+  | O => 0
+  | P1 n' => S (bin_to_nat n')
+  | T2 n' => mult 2 (bin_to_nat n')
+  end.
+
+Compute (incr (incr (incr O))).
+Compute (bin_to_nat (incr (incr (incr O)))).
+
+Theorem bin_P1_eq_P1_bin : forall (b : bin),
+  1 + (bin_to_nat b) = (bin_to_nat (P1 b)).
+Proof.
+  intros b. simpl. reflexivity.
+Qed.
+
+Theorem bin_T2_eq_P1_bin : forall (b : bin),
+  2 * (bin_to_nat b) = (bin_to_nat (T2 b)).
+Proof.
+  intros b. simpl. reflexivity.
+Qed.
+
+Example test_bin_incr1 : (incr (T2 (P1 (T2 O)))) = P1 (T2 (P1 (T2 O))).
+Proof. reflexivity. Qed.
+Example test_bin_incr2 : (incr (P1 (T2 (P1 (T2 O)))) = (T2 (T2 (P1 (T2 O))))).
+Proof. reflexivity. Qed.
+Example test_bin_incr3 : (incr (incr (incr (incr (incr (incr (incr (incr O)))))))) = T2 (T2 (T2 (P1 (T2 O)))).
+Proof. reflexivity. Qed.
+Example test_bin_incr4 :  (incr (incr (incr (incr (incr (incr (incr (T2 (T2 (T2 (P1 (T2 O)))))))))))) = P1 (T2 (P1 (T2 (P1 (T2 (P1 (T2 O))))))).
+Proof. reflexivity. Qed.
+Example test_bin_incr5 : (incr (incr (T2 (T2 (T2 (P1 (T2 O))))))) = T2 (P1 (T2 (T2 (P1 (T2 O))))).
+Proof. reflexivity. Qed.
+
+Example test_bin_to_nat1 : (bin_to_nat (incr (P1 (T2 (P1 (T2 O)))))) = (bin_to_nat (T2 (T2 (P1 (T2 O))))).
+Proof. reflexivity. Qed.
+Example test_bin_to_nat2 : (bin_to_nat (incr (incr (P1 (T2 (P1 (T2 O))))))) = (bin_to_nat (T2 (T2 (P1 (T2 O))))) + 1.
+Proof. reflexivity. Qed.
+Example test_bin_to_nat3 : (bin_to_nat (T2 (T2 (T2 (P1 (T2 O)))))) = (bin_to_nat (T2 (T2 (P1 (T2 O))))) + (bin_to_nat (T2 (T2 (P1 (T2 O))))).
+Proof. reflexivity. Qed.
+Example test_bin_to_nat4 : (bin_to_nat (T2 (T2 (T2 (T2 (T2 (T2 (T2 (T2 (T2 (T2 (P1 (T2 O))))))))))))) = 1024.
+Proof. reflexivity. Qed.
+Example test_bin_to_nat5 : (bin_to_nat (incr (incr (incr O)))) + (bin_to_nat (incr (incr O))) = (bin_to_nat (P1 (T2 (T2 (P1 (T2 O)))))).
+Proof. reflexivity. Qed.
+Example test_bin_to_nat6 : (bin_to_nat  (T2 O)) = 0.
+Proof. reflexivity. Qed.
+
+
+
+Definition foo (t : False) : nat := 3.
+
+Check foo.
+Require Import Coq.omega.Omega.
+Definition bar (l : list nat) (H : length l < 5) : { l : list nat | length l < 6}.
+refine (exist _ (cons 0 l) _).
+simpl. omega. Defined.
+
+Extraction bar.
+Extraction foo.
+(* create a subset type and take a proof argument and take in a list and a proof that the list has less than 5 elements *(
+(* incorrect inductive elimination, proofs can be eliminated only to build proofs *)
+Definition bar (t : ) : nat :=
+  match t with
+  | conj I _ => 3
+  end.
+
+Check bar.
+Extraction bar.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

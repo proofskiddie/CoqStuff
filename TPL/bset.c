@@ -1,0 +1,8 @@
+
+
+#include <stdio.h>
+
+int main(int argc, char * argv[]) {
+  char ** args = &argv[1];
+  return 0;
+}

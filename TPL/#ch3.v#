@@ -1,0 +1,110 @@
+Require Import Coq.Lists.List.
+
+Inductive T : Set :=
+ | True  : T
+ | False : T
+ | IFB : T -> T -> T -> T.
+
+Fixpoint onestep (t : T) : T :=
+  match t with
+  | IFB True  t2 t3 => t2
+  | IFB False t2 t3 => t3
+  | IFB (IFB t1 t2 t3) t4 t5 =>
+      IFB (IFB (onestep t1) t2 t3) t4 t5
+  | t => t
+  end.
+
+Inductive onestep_R : T -> T -> Prop :=
+  | E_IfTrue (t2 t3 : T) : onestep_R (IFB True t2 t3) t2
+  | E_IfFalse (t2 t3 : T) : onestep_R (IFB False t2 t3) t3
+  | E_If (t1 t1' t2 t3 : T) : onestep_R t1 t1' -> onestep_R (IFB t1 t2 t3) (IFB t1' t2 t3).
+
+Notation "A --> B" := (onestep_R A B)(at level 60).
+
+Theorem Determinancy_One_Step : forall t t' t'', t --> t' /\ t --> t'' ->  t' = t''.
+Proof. intros. destruct H. induction H. Admitted.
+
+Inductive B : Set :=
+| BT  : B 
+| BF  : B
+| BIF : B -> B -> B -> B
+| BO  : B
+| BS  : B -> B
+| BP  : B -> B
+| BIZ : B -> B.
+
+(* 
+   how to represent a set given a type A
+   how to enumerate all values of a given type A
+   / represent a set of only constant elements
+   
+   inductive types in coq have a finite number of constructors. given an 
+   evaluation function on a type ( A -> A ) we get a set of values of type A.
+   There are two cases to consider for enumerating such values, infinite and finite
+   numbers of values. 
+   
+   given a finite number of constructors all elements of the type can be enumerated.
+   this type will be coinductive however. with a finite or infinite number of values
+   it is not possible to know when the evaluation function is finished 'visiting' 
+   all values. 
+
+   creating a set from an evaluation function. Each time the function is called 
+   it will either return a value which is in the set already, is not in the set, or 
+   if the evaluation function does not recurse until a value is found, it could return
+   a non-value term. 
+
+   Even though in theory all values can be contained in a regular list if there are
+   a finite number, it will not be able to actually extract this information from 
+   the constructors in the general case. This is becasuse there is no way to tell,
+   given an evaluation function and a way of enumerating all elements of a type, 
+   when the evaluation function has seen every possible value of the type. 
+
+   When a value is found it can be used to update a set function A -> Bool. 
+   the updated function will then return true when evaluated at that value. 
+   
+ *)
+
+Section BSet.
+  Variable A : Set.
+  Definition bset := A -> bool.
+End BSet.
+
+Fixpoint beq' (b1 b2 : B) : bool :=
+  match b1, b2 with
+    | BO, BO
+    | BT, BT 
+    | BF, BF => true
+    | (BIF t1 t2 t3), (BIF t4 t5 t6) => beq' t1 t4 && beq' t2 t5 && beq' t3 t6
+    | BS t1, BS t2 
+    | BP t1, BP t2 
+    | BIZ t1, BIZ t2 => beq' t1 t2                           
+    | _, _ => false
+  end.                                             
+
+Fixpoint constB_helper (s : bset B) (b : B) : list B :=
+  match b with
+  | BS t 
+  | BP t
+  | BIZ t => constB_helper (fun x => if beq' x t then true else s t) t
+  | BIF t1 t2 t3 => flat_map (constB_helper
+        (fun x =>
+         if (orb (orb (beq' x t1) (beq' x t2)) (beq' x t3)) then true else s x))
+                                (t1 :: t2 :: t3 :: nil)
+  | x => if s x then nil else x :: nil
+  end.
+
+Fixpoint constB (b : B) : list B := constB_helper (fun x => false) b.
+
+Compute constB (BIZ BT).
+
+Fixpoint remove_dup_helper {A : Set}
+         (s : bset A) (aeq : A -> A -> bool) (l : list A) : list A :=
+  match l with
+  | nil => nil
+  | (x :: xs) => (if s x then nil else x :: remove_dup_helper
+                   (fun t => if aeq x t then true else s x) aeq xs)
+  end.
+
+Fixpoint remove_dup {A : Set} (aeq : A -> A -> bool) (l : list A) : list A :=
+  remove_dup_helper (fun x => false) aeq l.
+

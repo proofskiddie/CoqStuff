@@ -1,0 +1,214 @@
+Require Import Coq.Bool.Bool.
+Require Import Coq.Arith.Arith.
+Require Import Coq.omega.Omega.
+Require Import Coq.Lists.List.
+Require Import Coq.Logic.FunctionalExtensionality.
+Import ListNotations.
+Require Import Maps.
+Require Import Imp.
+
+Definition aequiv (a1 a2 : aexp) : Prop :=
+  forall st : state, aeval st a1 = aeval st a2.
+
+Definition bequiv (b1 b2 : bexp) : Prop :=
+  forall st : state, beval st b1 = beval st b2.
+
+Theorem aequiv_example :
+  aequiv (AMinus (AId X) (AId X)) (ANum 0).
+Proof. intros st. apply Nat.sub_diag. Qed.
+
+Theorem bequiv_example :
+  bequiv (BEq (AMinus (AId X) (AId X)) (ANum 0)) BTrue.
+Proof. intros st. simpl. rewrite Nat.sub_diag. reflexivity. Qed.
+
+Definition cequiv (c1 c2 : com) : Prop :=
+  forall st st' : state,
+    (c1 / st \\ st') <-> (c2 / st \\ st').
+
+Theorem skip_left : forall c,
+    cequiv (SKIP;; c) c.
+Proof. intros c st st'. split; intros H.
+       -inversion H. subst.
+        inversion H2. subst. apply H5.
+       -apply E_Seq with (st' := st). apply E_Skip.
+        apply H.
+Qed.
+
+Theorem skip_right : forall c,
+    cequiv (c;; SKIP) c.
+Proof. intros c st st'. split; intros H.
+       -inversion H. subst.
+        inversion H5. subst. assumption.
+       -apply E_Seq with (st' := st').
+        apply H. apply E_Skip.
+Qed.
+
+Theorem IFB_true_simple : forall c1 c2,
+    cequiv (IFB BTrue THEN c1 ELSE c2 FI) c1.
+Proof. intros c1 c2 st st'. split; intros H.
+       -inversion H; subst.
+        +apply H5.
+        +inversion H6.
+       -apply E_IfTrue.
+        +apply H.
+        +reflexivity.
+Qed.
+
+Theorem IFB_true : forall c1 c2 b,
+    bequiv b BTrue ->
+    cequiv (IFB b THEN c1 ELSE c2 FI) c1.
+Proof. intros c1 c2 b H st st'. split; intros H1.
+       -inversion H1; subst; [assumption |
+        rewrite H in H7; inversion H7].
+       -apply E_IfTrue. apply H1. apply H.
+Qed.
+
+Theorem IFB_false : forall c1 c2 b,
+    bequiv b BFalse ->
+    cequiv (IFB b THEN c1 ELSE c2 FI) c2.
+Proof. intros c1 c2 b H st st'. split; intros H1.
+       -inversion H1; subst. rewrite H in H7. inversion H7.
+        assumption.
+       -apply E_IfFalse. apply H1. apply H.
+Qed.
+
+Theorem swap_if_branches : forall c1 c2 b,
+    cequiv (IFB b THEN c1 ELSE c2 FI) (IFB BNot b THEN c2 ELSE c1 FI).
+Proof. intros c1 c2 b st st'. split; intros H.
+       -inversion H; subst; [apply E_IfFalse | apply E_IfTrue]; try assumption;
+        simpl; apply negb_false_iff; try rewrite negb_involutive; assumption.
+       -inversion H; subst; simpl in H6; [apply negb_true_iff in H6 | apply negb_false_iff in H6];
+        [apply E_IfFalse | apply E_IfTrue]; try apply H5; try apply H6.
+Qed.
+
+Theorem WHILE_false : forall c b,
+    bequiv b BFalse ->
+    cequiv (WHILE b DO c END) SKIP.
+Proof. intros c b H st st'. split; intros H1.
+       -inversion H1; subst; try apply E_Skip.
+        rewrite H in H3. inversion H3.
+       -inversion H1. subst. apply E_WhileEnd.
+        rewrite H. reflexivity.
+Qed.
+
+Lemma WHILE_true_nonterm : forall b c st st',
+    bequiv b BTrue ->
+    ~( (WHILE b DO c END) / st \\ st' ).
+Proof. unfold not. intros b c st st' Hb H. remember (WHILE b DO c END) as cw eqn:HH.
+       induction H; try inversion HH. subst. rewrite Hb in H. inversion H.
+       subst. apply IHceval_funR2. reflexivity.
+Qed.
+
+Theorem WHILE_true : forall b c,
+    bequiv b BTrue ->
+    cequiv (WHILE b DO c END) (WHILE b DO SKIP END).
+Proof. intros b c H. split; intros H1;
+       exfalso; [apply WHILE_true_nonterm with (c:=c) (st:=st) (st':=st') in H |
+                 apply WHILE_true_nonterm with (c:=SKIP) (st:=st) (st':=st') in H ]; 
+        apply H; apply H1.
+Qed.
+
+Theorem loop_unrolling : forall b c,
+    cequiv (WHILE b DO c END) (IFB b THEN (c ;; WHILE b DO c END) ELSE SKIP FI).
+Proof. intros b c. split; intros H.
+       -inversion H; subst.
+        +apply E_IfFalse. apply E_Skip. apply H4.
+        +apply E_IfTrue. apply E_Seq with (st':=st'0). apply H3. apply H6. apply H2.
+       -inversion H; inversion H5. subst.
+        +apply E_WhileLoop with (st':=st'1). apply H6. apply H9. apply H12. 
+        +subst. apply E_WhileEnd. apply H6.
+Qed.
+
+(* the way this proof worked, I used replace before inversion, I was able to single
+one instance of st' to replace. What if c \ st' / st' were the case instead. Is there
+a way to only target the second instance? *)
+Theorem identity_assignment : forall X,
+    cequiv (X ::= AId X) SKIP.
+Proof. intros X. split; intros H.
+       -inversion H. subst. simpl. replace (t_update st X (st X)) with st.
+        apply E_Skip. symmetry. apply t_update_same.
+       -replace st' with (t_update st' X (st' X)). inversion H. subst.
+        apply E_Ass. reflexivity. apply t_update_same.
+Qed.
+
+Theorem assign_aequiv : forall X e,
+    aequiv (AId X) e ->
+    cequiv SKIP (X ::= e).
+Proof. intros X e H. split; intros H1.
+       +unfold aequiv in H. symmetry in H. 
+        apply E_Ass with (st:=st') (x:=X) in H. simpl in H.
+        replace st' with (t_update st' X (st' X)).
+        inversion H1. subst. apply H. apply t_update_same.
+       +inversion H1. subst. unfold aequiv in H. rewrite <- H.
+        simpl. rewrite t_update_same. apply E_Skip.
+Qed.
+
+Lemma refl_aequiv : forall a, aequiv a a.
+Proof. unfold aequiv. reflexivity.
+Qed.
+
+Lemma sym_aequiv : forall a1 a2,
+    aequiv a1 a2 -> aequiv a2 a1.
+Proof. intros a1 a2 H. unfold aequiv. unfold aequiv in H.
+       symmetry. apply H.
+Qed.
+
+Lemma trans_aequiv : forall a1 a2 a3,
+    aequiv a1 a2 -> aequiv a2 a3 -> aequiv a1 a3.
+Proof. intros a1 a2 a3 H1 H2. unfold aequiv in H1. unfold aequiv in H2.
+       unfold aequiv. intros st. rewrite <- H2. apply H1.
+Qed.
+
+Lemma refl_bequiv : forall b, bequiv b b.
+Proof. unfold bequiv. reflexivity.
+Qed.
+
+Lemma sym_bequiv : forall b1 b2,
+    bequiv b1 b2 -> bequiv b2 b1.
+Proof. intros b1 b2 H. unfold bequiv. unfold bequiv in H.
+       symmetry. apply H.
+Qed.
+
+Lemma trans_bequiv : forall b1 b2 b3,
+    bequiv b1 b2 -> bequiv b2 b3 -> bequiv b1 b3.
+Proof. intros b1 b2 b3 H1 H2. unfold bequiv in H1. unfold bequiv in H2.
+       unfold bequiv. intros st. rewrite <- H2. apply H1.
+Qed.
+
+Lemma refl_cequiv : forall c, cequiv c c.
+Proof. unfold cequiv. reflexivity.
+Qed.
+
+Lemma sym_cequiv : forall c1 c2,
+    cequiv c1 c2 -> cequiv c2 c1.
+Proof. intros c1 c2 H. unfold cequiv. unfold cequiv in H.
+       symmetry. apply H.
+Qed.
+
+Lemma iff_trans : forall P1 P2 P3 : Prop,
+    (P1 <-> P2) -> (P2 <-> P3) -> (P1 <-> P3).
+Proof. intros P1 P2 P3 H1 H2. rewrite <- H2. apply H1.
+Qed.
+
+Lemma trans_cequiv : forall c1 c2 c3,
+    cequiv c1 c2 -> cequiv c2 c3 -> cequiv c1 c3.
+Proof. intros c1 c2 c3 H1 H2. unfold cequiv in H1. unfold cequiv in H2.
+       unfold cequiv. intros st st'. rewrite <- H2. apply H1.
+Qed.
+
+Theorem CAss_congruence : forall i a1 a1',
+    aequiv a1 a1' ->
+    cequiv (i ::= a1) (i ::= a1').
+Proof. intros i a1 a1' H. split; intros H1;
+       inversion H1; subst; apply E_Ass; unfold aequiv in H;
+        rewrite H; reflexivity.
+Qed.
+
+Theorem CWhile_congruence : forall b b' c c',
+    bequiv b b' ->
+    cequiv c c' ->
+    cequiv (WHILE b DO c END) (WHILE b' DO c' END).
+Proof. intros b b' c c' Hb Hc. split; intros H.
+       -remember ((WHILE b DO c END) / st \\ st') as Hw.
+        induction HeqHw.
+

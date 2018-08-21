@@ -1,0 +1,35 @@
+Require Import Coq.Lists.List.
+Import ListNotations.
+
+Inductive TapeDescription {A : Type} : list A -> A -> nat -> Prop :=
+| TD : forall (l : list A) (empty : A) (headPos : nat),
+    headPos < length l -> TapeDescription l empty headPos.
+
+Fixpoint nthReplace {A : Type} (n : nat) (repl : A) (l : list A) : list A :=
+  match n, l with
+  | _, [] => [repl]
+  | 0, (x::xs) => repl :: xs
+  | n, (x::xs) => x :: nthReplace (n - 1) repl xs                  
+  end.
+
+Inductive OneStep {A : Type} : Type :=
+| RMov : forall (l : list A) (empty : A) (headPos : nat),
+    ((headPos = length l)
+     -> (TapeDescription (l ++ [empty]) empty (headPos + 1))) \/
+    ((headPos < length l)
+    -> (TapeDescription l empty (headPos + 1)))
+    -> OneStep
+| LMov : forall (l : list A) (empty : A) (headPos : nat),
+    ((headPos = 0)
+     -> (TapeDescription (empty :: l) empty headPos)) \/
+    ((headPos < length l)
+    -> (TapeDescription l empty (headPos - 1)))
+    -> OneStep
+| Repl a : forall (l : list A) (empty : A) (headPos : nat),
+    (In a l)
+    -> (TapeDescription (nthReplace headPos a l) empty headPos) \/
+    (~(In a l)
+    -> (TapeDescription l empty headPos))
+    -> OneStep.
+
+Goal 

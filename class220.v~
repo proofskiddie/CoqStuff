@@ -1,0 +1,10 @@
+
+Theorem DeMorgan1 : forall A B, negb (andb A B) = orb (negb A) (negb B).
+Proof.
+  intros. destruct A; destruct B; reflexivity. Qed.
+
+Theorem DeMorgan2 : forall A B, negb (orb A B) = andb (negb A) (negb B).
+Proof.
+  intros. destruct A; destruct B; reflexivity. Qed.
+
+

@@ -1,0 +1,143 @@
+Require Import
+  CpdtTactics
+  Coq.Logic.FinFun
+  Coq.Sets.Ensembles 
+  Coq.Relations.Relation_Definitions
+  Coq.Lists.ListDec.
+Section Relations.
+  Variable T : Type.
+  Definition irreflexive := fun R : relation T => forall t : T, R t t -> False.
+  Definition undirected := fun R : relation T => symmetric T R /\ irreflexive R.
+  Definition subseteq := fun E F : Ensemble T => Included T E F.
+  Definition subreleq := fun R S : relation T => forall t u : T, R t u -> S t u.
+  Definition matching_relation := fun R : relation T =>
+    forall t u : T, R t u -> forall v : T, R t v -> u = v.
+  Definition union_relation : relation T -> Ensemble T :=
+    fun R : relation T => fun t : T => exists u : T, R t u \/ R u t.
+  Definition ensemble_relation : relation T -> Ensemble (T * T) :=
+    fun R : relation T => fun p : T * T => R (fst p) (snd p).
+End Relations.
+Section Ensembles.
+  Variables A B : Type.
+  Variable PA : Ensemble A.
+  Variable PB : Ensemble B.
+  Definition EnsembleFunction := {a : A | PA a} -> {b : B | PB b}.
+  Section Functions.
+    Variable f : EnsembleFunction.
+    Definition ef_injective := forall a1 a2 : sig PA, (proj1_sig (f a1)) = (proj1_sig (f a2)) -> proj1_sig a1 = proj1_sig a2.
+    Definition ef_surjective := forall b : sig PB, exists a : sig PA, f a = b.
+    Definition ef_bijective := ef_injective /\ ef_surjective.
+  End Functions.
+End Ensembles.
+Arguments ensemble_relation {T}.
+Arguments EnsembleFunction {A} {B}.
+Arguments ef_injective {A} {B} {PA} {PB}.
+Arguments ef_surjective {A} {B} {PA} {PB}.
+Arguments ef_bijective {A} {B} {PA} {PB}.
+Arguments subseteq {T}.
+Arguments subreleq {T}.
+Definition not_a_and_not_b : forall A B : Prop, (A -> False) -> (B -> False) -> (A \/ B) -> False :=
+  fun A B => fun not_a not_b a_or_b => match a_or_b with | or_introl a => not_a a | or_intror b => not_b b end.
+Section UndirectedGraph.
+  Variable V : Set.
+  Let VSet := Ensemble V.
+  Let ESet := relation V.
+  Variable E : ESet.
+  Hypothesis E_undirected : undirected V E.
+  Section VertexCover.
+    Variable C : VSet.
+    Definition isVertexCover := forall u v : V, E u v -> C u \/ C v.
+    Definition choiceVertexCover := forall u v : V, E u v -> C u + C v.
+   
+    Section Decide.
+      Variable decider : forall v : V, C v <-> ~~(C v).
+      Hypothesis c_vc : isVertexCover.
+    (*  Definition decidable_vc_implies_choice_vc : choiceVertexCover :=
+        fun u v => fun e_uv =>
+        match (decider u) with
+        | inl c_u => inl c_u
+        | inr not_c_u =>
+          match (decider v) with
+          | inl c_v => inr c_v
+          | inr not_c_v =>
+            match not_a_and_not_b (C u) (C v) not_c_u not_c_v (c_vc u v e_uv) return C u + C v with end
+          end
+        end. *)
+    End Decide.
+  End VertexCover.
+  Section Matching.
+    Variable M : ESet.
+    Definition isMatching := subreleq M E /\ matching_relation V M /\ antisymmetric V M /\ irreflexive V M.
+    Definition isMaximalMatching := isMatching /\ isVertexCover (union_relation V M).
+  End Matching.
+  Section MVC.
+    Variable M : ESet.
+    Hypothesis m_matching : isMatching M.
+    Let m_implies_e : forall u v : V, M u v -> E u v :=
+      fun u v => (proj1 m_matching) u v.
+    Let subrel_m : forall u v : V, M u v -> E u v :=
+      proj1 m_matching.
+    Let mr_m : forall u v : V, M u v -> forall w : V, M u w -> v = w  :=
+      proj1 (proj2 m_matching).
+    Let as_m : forall u v : V, M u v -> M v u -> u = v :=
+      proj1 (proj2 (proj2 m_matching)).
+    Let M2 := ensemble_relation M.
+    Section IntroC.
+      Variable C : VSet.
+      Hypothesis c_cover : isVertexCover C.
+      Hypothesis c_dcover : choiceVertexCover C.
+      Definition match_cover : forall u v : V, M u v -> C u \/ C v :=
+        fun u v => fun match_uv => c_cover u v (subrel_m u v match_uv).
+     
+      (* GOAL: Prove that M (the edges of any matching) injects into C (any vertex cover) *)
+      (* i.e. the numbers of edges in a matching is an inclusive lower bound on minimum VC *)
+      (* NOTE: Matching is antisymmetric and irreflexive i.e. M u v -> ~ M v u *)
+      Section ConstructFunc.
+        Variables u v : V.
+        Hypothesis m_uv : M u v.
+        Let e_uv : E u v := m_implies_e u v m_uv.
+        Let decision := c_dcover u v e_uv.
+        Definition into_cover : {x : V | C x} :=
+          match decision with
+          | inl c_u => exist C u c_u
+          | inr c_v => exist C v c_v
+          end.
+      End ConstructFunc.
+      Section ConstructFuncInj.
+        Variables u v1 v2 : V.
+        Hypothesis m_uv1 : M u v1.
+        Hypothesis m_uv2 : M u v2.
+        Let fuv1 := proj1_sig (into_cover u v1 m_uv1).
+        Let fuv2 := proj1_sig (into_cover u v2 m_uv2).
+        Hypothesis sameval : fuv1 = fuv2.
+        Theorem into_cover_injective : v1 = v2.
+        Proof. eauto. Qed.
+
+      End ConstructFuncInj.
+      Section SetFunc.
+        Variable uv_ex : {uv : V * V | M (fst uv) (snd uv)}.
+        Let uv := proj1_sig uv_ex.
+        Let u := fst uv.
+        Let v := snd uv.
+        Let m_uv : M u v := proj2_sig uv_ex.
+        Let cu_or_cv := c_cover u v (m_implies_e u v m_uv).
+        Let cu_plus_cv := c_dcover u v (m_implies_e u v m_uv).
+        Definition setfunc_into_cover : {v : V | C v} :=
+          match cu_plus_cv with
+          | inl cu => exist C u cu
+          | inr cv => exist C v cv
+          end.
+      End SetFunc.
+      Check setfunc_into_cover : sig M2 -> sig C.
+      
+      Theorem m2_inject_c : ef_injective setfunc_into_cover.
+      Proof. unfold ef_injective. intros. unfold proj1_sig. 
+             unfold proj1_sig in H. unfold setfunc_into_cover in H. 
+             destruct c_dcover in H. symmetry in H. destruct c_dcover in H.
+                          
+      
+             
+                
+    End IntroC.
+  End MVC.
+End UndirectedGraph.

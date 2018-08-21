@@ -1,0 +1,449 @@
+
+Add LoadPath "C:/Coq/buffer".
+Require Import Coq.Bool.Bool.
+Require Import Coq.Arith.Arith.
+Require Import Coq.Arith.EqNat.
+Require Import Coq.omega.Omega.
+Require Import Coq.Lists.List.
+Import ListNotations.
+
+Require Export Maps.
+
+(*computation is a sequence of states, each adjacent pair of which
+  is a transition. A program defines a form of its states, the set
+  of transitions between states, and the set of computations it c-
+  an produce *)
+
+(*state is a function from string to bool defined for all inputs, default false *)
+Definition state := total_map bool.
+Definition empty_state : state := t_empty false.
+
+Definition P : id := Id "P".
+Definition Q : id := Id "Q".
+Definition R : id := Id "R".
+Definition S : id := Id "S".
+
+Inductive atom : Type :=
+| AVal : bool -> atom
+| AVar : id -> atom.
+
+Notation "^a A" := (AVal A) (at level 30).
+Notation "^s A" := (AVar A) (at level 30).
+
+Inductive formula : Type :=
+| FAto : atom -> formula
+| FNot : formula -> formula
+| FOr : formula -> formula -> formula
+| FAnd : formula -> formula -> formula
+| FImp : formula -> formula -> formula
+| FIff : formula -> formula -> formula.
+
+(*somewhat clumsey using the ^ before every declaration*)
+Notation "^~ A" := (FNot A) (at level 40).
+Notation "A '^\/' B" := (FOr A B) (at level 60, right associativity).
+Notation "A '^/\' B" := (FAnd A B) (at level 55, right associativity).
+Notation "A '^->' B" := (FImp A B) (at level 65, right associativity).
+Notation "A '^<->' B" := (FIff A B) (at level 70, right associativity).
+Notation "^*? P" := (FAto P) (at level 35).
+Notation "^* P" := (FAto (AVar P)) (at level 35).
+Notation "^** P" := (FAto (AVal P)) (at level 35).
+
+
+Reserved Notation  "A '<S' B" (at level 50, left associativity).
+
+Inductive subformula : formula -> formula -> Prop :=
+| sub_lit : forall l,
+    FAto l <S FAto l
+| sub_not : forall s f,
+    s <S f -> s <S FNot f
+| sub_orL : forall s f1 f2,
+    s <S f1 -> s <S FOr f1 f2
+| sub_orR : forall s f1 f2,
+    s <S f2 -> s <S FOr f1 f2
+| sub_andL : forall s f1 f2,
+    s <S f1 -> s <S FAnd f1 f2
+| sub_andR : forall s f1 f2,
+    s <S f2 -> s <S FAnd f1 f2
+| sub_impL : forall s f1 f2,
+    s <S f1 -> s <S FImp f1 f2
+| sub_impR : forall s f1 f2,
+    s <S f2 -> s <S FImp f1 f2
+| sub_iffL : forall s f1 f2,
+    s <S f1 -> s <S FIff f1 f2
+| sub_iffR : forall s f1 f2,
+    s <S f2 -> s <S FIff f1 f2
+| sub_triv : forall f1 f2,
+    f1 = f2 -> f1 <S f2
+(* f1 <S f1 *)                     
+ where "A '<S' B" := (subformula A B) : type_scope.
+
+Definition strict_subformula (f1 f2 : formula) : Prop :=
+ f1 <> f2 /\ f1 <S f2.
+Notation "A '<<S' B" := (strict_subformula A B) (at level 50, left associativity).
+
+Module ex1p1.
+  Definition f := ( ^*P ^/\ ^*Q) ^-> ( ^*P ^\/ (^~ ^*Q)).
+  Definition s1 := ( ^*P ^/\ ^*Q).
+  Definition s2 := (^~ ^*Q).
+  Definition s3 := ( ^*P ^\/ ^~ ^*Q).
+  Definition s4 := ^*P.
+  Definition s5 := ^*Q.
+  
+  Example ex1p11 : f <S f.
+  Proof. apply sub_triv. reflexivity.
+  Qed.
+
+  Example ex1p12 : s1 <<S f.
+  Proof. unfold strict_subformula. split.
+         -unfold not. intros. inversion H.
+         -apply sub_impL. apply sub_triv. reflexivity.
+  Qed.
+
+  Example ex1p13 : s2 <<S f.
+  Proof. unfold strict_subformula. split.
+         -unfold not. intros. inversion H.
+         -apply sub_impR. apply sub_orR. apply sub_triv. reflexivity.
+  Qed.
+
+  Example ex1p14 : s3 <<S f.
+  Proof. unfold strict_subformula. split.
+         -unfold not. intros. inversion H.
+         -apply sub_impR. apply sub_triv. reflexivity.
+  Qed.
+  
+  Example ex1p15 : s4 <<S f.
+  Proof. unfold strict_subformula. split.
+         -unfold not. intros. inversion H.
+         -apply sub_impL. apply sub_andL. apply sub_triv. reflexivity.
+   Qed.
+
+  Example ex1p16 : s5 <<S f.
+  Proof. unfold strict_subformula. split.
+         -unfold not. intros. inversion H.
+         -apply sub_impR. apply sub_orR. apply sub_not.
+          apply sub_triv. reflexivity.
+   Qed.
+End ex1p1.
+
+(*takes a list of (id, bool) pairs and returns a state*)
+Definition IList : Type := list (id * bool).
+Fixpoint interpret (I : IList) : state :=
+  match I with
+  | nil => empty_state
+  | h :: t => (t_update (interpret t) (fst h) (snd h))
+  end.
+
+(*had choice between using boolean functions and if then else statements
+  does it matter which one? Was worried that excluded middle would be a 
+  problem*)
+Fixpoint eval_formula (st : state) (f : formula) : bool :=
+  match f with
+  | FAto a =>
+    match a with
+    | AVar a' => st a'
+    | AVal a' => a'
+    end
+  | FNot A => if (eval_formula st A) then false else true
+  | FOr A B =>  if (eval_formula st A) then true else (eval_formula st B)
+  | FAnd A B => if (eval_formula st A) then (eval_formula st B) else false
+  | FImp A B => if (eval_formula st A) then (eval_formula st B) else true
+  | FIff A B => match (eval_formula st A) with
+                | true => (eval_formula st B)
+                | false => if (eval_formula st B) then false else true
+                end
+  end.
+
+(*I am really happy with this notation *)
+Notation " I |= f " := (eval_formula (interpret I) f = true) (at level 80).
+Notation " I |/= f " := (eval_formula (interpret I) f = false) (at level 80).
+(* this applies a formula to an interpretation, treating the interpretation as 
+   the function it is, and extending the domain of that function from strings
+   to formulas *)
+Notation "I ^* F" := (eval_formula I F) (at level 35).
+
+Example ex1p3 : [(P,true);(Q,false)] |= (( ^*P ^/\ ^*Q) ^-> ( ^*P ^\/ ^~ ^*Q)).
+Proof. reflexivity. Qed.
+
+Theorem Ftrue_is_true : forall I, I |= ^**true.
+Proof. intros I. reflexivity. Qed.
+
+Theorem Ffalse_is_false : forall I, I |/= ^**false.
+Proof. intros I. reflexivity. Qed.
+
+Theorem Fvar_true_iff_true : forall I P,  I |= ^*P <-> interpret I P = true.  
+Proof. intros I P. split; try (intros H; simpl in H; apply H). Qed.
+
+Theorem Fvar_false_iff_false : forall I P,  I |/= ^*P <-> interpret I P = false.
+Proof. intros I P. split; try (intros H; simpl in H; apply H). Qed.
+Theorem Fnot_true_iff : forall I F, I |= ^~ F <-> I |/= F.
+Proof. intros I F. split.
+       -intros H. simpl in H. apply negb_true_iff. rewrite <- H. reflexivity.
+       -intros H. simpl. rewrite H. reflexivity.
+Qed.
+
+Theorem Fand_true_iff : forall I F1 F2, I |= F1 ^/\ F2 <-> I |= F1 /\ I |= F2.
+Proof. intros I F1 F2. split.
+       -intros H. simpl in H. apply andb_true_iff in H. apply H.
+       -intros H. apply andb_true_iff. apply H.
+Qed. 
+
+Theorem For_true_iff : forall I F1 F2, I |= F1 ^\/ F2 <-> I |= F1 \/ I |= F2.
+Proof. intros I F1 F2. split.
+       -intros H. simpl in H. apply orb_true_iff in H. apply H.
+       -intros H. apply orb_true_iff. apply H.
+Qed.
+
+Lemma Fdemorgans : forall I F1 F2, I |= F1 ^/\ F2 <-> I |/= ^~ F1 ^\/ ^~ F2.
+Proof. intros I F1 F2. split.
+       -intros H. rewrite <- negb_false_iff in H. rewrite <- H. simpl.
+        destruct (interpret I ^* F1). destruct (interpret I^*F2).
+        reflexivity. reflexivity. reflexivity.
+       -intros H. rewrite <- negb_false_iff. rewrite <- H. simpl.
+        destruct (interpret I ^* F1). destruct (interpret I^*F2).
+        reflexivity. reflexivity. reflexivity.
+Qed.
+
+Theorem Fnot_true_double_elim : forall I F, I |= F <-> I |= ^~ ^~ F.
+Proof. intros I F. split; 
+       intros H; rewrite <- H; simpl; destruct (interpret I ^* F); try reflexivity.
+Qed.
+
+Theorem Fnot_false_double_elim : forall I F, I |/= F <-> I |/= ^~^~ F.
+Proof. intros I F. split;
+       intros H; rewrite <- H; simpl; destruct (interpret I ^* F); try reflexivity. 
+Qed.
+
+Theorem For_false_elimL : forall I F1 F2, I |/= F1 ^\/ F2 -> I |/= F1.
+Proof. intros I F1 F2 H. rewrite <- not_true_iff_false. unfold not.
+       intros H1. rewrite <- not_true_iff_false in H. apply H.
+       apply For_true_iff. left. apply H1.
+Qed.
+
+Theorem For_false_elimR : forall I F1 F2, I |/= F1 ^\/ F2 -> I |/= F2.
+Proof. intros I F1 F2 H. rewrite <- not_true_iff_false. unfold not.
+       intros H1. rewrite <- not_true_iff_false in H. apply H.
+       apply For_true_iff. right. apply H1.
+Qed.
+
+Theorem For_false_iff : forall I F1 F2, I |/= F1 ^\/ F2 <-> I |/= F1 /\ I |/= F2.
+Proof. intros I F1 F2. split.
+       -intros H. split. apply For_false_elimL in H. apply H.
+        apply For_false_elimR in H. apply H.
+       -intros [H H1]. apply not_true_iff_false. intros H2.
+        apply For_true_iff in H2. destruct H2.
+        *apply not_true_iff_false in H. apply H. apply H0.
+        *apply not_true_iff_false in H1. apply H1. apply H0.
+Qed.
+
+Theorem Fimp_true_iff : forall I F1 F2, I |= F1 ^-> F2 <-> (I |= F1 -> I |= F2).
+Proof. intros I F1 F2. split.
+       -intros H HF1. simpl in H. rewrite HF1 in H. apply H.
+       -intros H. simpl. destruct (eval_formula (interpret I) F1).
+        apply H. reflexivity. reflexivity.
+Qed.
+
+Theorem Fimp_true_elim : forall I F1 F2, I |= F1 ^-> F2 <-> I |/= F1 \/ I |= F2.
+Proof. intros I F1 F2. split.
+       -intros H. rewrite <- Fnot_true_iff. apply For_true_iff.
+        rewrite <- H. simpl. destruct (interpret I ^* F1).
+        reflexivity. reflexivity.
+       -intros H. destruct H. apply Fimp_true_iff. intros contra.
+        rewrite contra in H. inversion H.
+        apply Fimp_true_iff. intros H1. apply H.
+Qed.
+
+Theorem Fimp_false_elim : forall I F1 F2, I |/= F1 ^-> F2 <-> I |= F1 /\ I |/= F2.
+Proof. intros I F1 F2. split.
+       -intros H. rewrite <- Fnot_true_iff. apply Fand_true_iff.
+        rewrite <-  negb_false_iff. rewrite <- H. simpl.
+        destruct (interpret I ^* F1); destruct (interpret I ^* F2); reflexivity.
+       -intros H. apply not_true_iff_false. intros H1. destruct H.
+        apply not_true_iff_false in H0. apply H0. rewrite Fimp_true_iff in H1.
+        apply H1 in H. apply H.
+Qed.
+        
+Theorem Fiff_true_iff : forall I F1 F2, I |= F1 ^<-> F2 <-> (I |= F1 <-> I |= F2).
+Proof. split.
+       -intros. split.
+        +intros. simpl in H. rewrite H0 in H. apply H.
+        +intros. simpl in H. destruct (eval_formula (interpret I) F1). reflexivity.
+         rewrite H0 in H. inversion H.
+       -intros. simpl. destruct (eval_formula (interpret I) F1). apply H. reflexivity.
+        destruct H. destruct (eval_formula (interpret I) F2). apply H0. reflexivity.
+        reflexivity.
+Qed.
+
+Theorem Fiff_iff_Fimp : forall I F1 F2, I |= F1 ^-> F2 /\ I |= F2 ^-> F1 <-> I |= F1 ^<-> F2.
+Proof. intros I F1 F2. split.
+       -intros H. destruct H. apply Fiff_true_iff. split.
+        +apply Fimp_true_iff. apply H.
+        +apply Fimp_true_iff. apply H0.
+       -intros. split; apply Fiff_true_iff in H; destruct H; apply Fimp_true_iff.
+        +apply H.
+        +apply H0.
+Qed.
+
+Theorem Fiff_true_elim : forall I F1 F2,
+    I |= F1 ^<-> F2 <-> I |= F1 ^/\ F2 \/ I |/= F1 ^\/ F2.
+Proof. intros I F1 F2. split.
+       -intros H. rewrite <- Fnot_true_iff. apply For_true_iff.
+        rewrite <- H. simpl. destruct (interpret I ^* F1);
+        destruct (interpret I ^* F2); reflexivity.
+       -intros H. rewrite <- Fnot_true_iff in H. apply For_true_iff in H.
+        rewrite <- H. simpl. destruct (interpret I ^* F1);
+        destruct (interpret I ^* F2); reflexivity.
+Qed.
+
+Theorem Fiff_false_elim : forall I F1 F2,
+    I |/= F1 ^<-> F2 <-> I |= F1 ^/\ ^~ F2 \/ I |= ^~F1 ^/\ F2.
+Proof. intros I F1 F2. split.
+       -intros H. apply For_true_iff. apply Fnot_true_iff in H.
+        rewrite <- H. simpl. destruct (interpret I ^* F1);
+        destruct (interpret I ^* F2); reflexivity.
+       -intros H. apply Fnot_true_iff. apply For_true_iff in H.
+        rewrite <- H. simpl. destruct (interpret I ^* F1);
+        destruct (interpret I ^* F2); reflexivity.
+Qed.                           
+  
+Theorem Fand_false_iff : forall I F1 F2, I |/= F1 ^/\ F2 <-> I |/= F1 \/ I |/= F2.
+Proof. intros I F1 F2. split.
+       -intros H. simpl. simpl in H. destruct (interpret I ^*F1). right. apply H. left. reflexivity.
+       -intros H. simpl. simpl in H. destruct H. rewrite H. reflexivity. rewrite H. destruct (interpret I ^*F1); reflexivity.
+Qed.
+
+Theorem Fand_false_introL : forall I F1, I |/= F1 -> (forall F2, I |/= F1 ^/\ F2).
+Proof. intros I F1 H F2.
+       apply Fand_false_iff. left. apply H.
+Qed.
+
+Theorem Fand_false_introR : forall I F2, I |/= F2 -> (forall F1, I |/= F1 ^/\ F2).
+Proof. intros I F2 H F1.
+       apply Fand_false_iff. right. apply H.
+Qed.
+
+Theorem For_true_introL : forall I F1, I |= F1 -> (forall F2, I |= F1 ^\/ F2).
+Proof. intros I F1 H F2. apply For_true_iff. left. apply H.
+Qed.
+
+Theorem For_true_intror : forall I F2, I |= F2 -> (forall F1, I |= F1 ^\/ F2).
+Proof. intros I F2 H F1. apply For_true_iff. right. apply H.
+Qed.
+
+Theorem Fimp_false_intro : forall I F1, I |/= F1 -> (forall F2, I |= F1 ^-> F2).
+Proof. intros I F1 H F2. apply Fimp_true_iff. intros HN.
+       rewrite  H in HN. inversion HN.
+Qed.
+
+Theorem Fnot_false_elim : forall I F, I |/= ^~ F <-> I |= F.
+Proof. intros I F. split.
+       -intros H. apply Fnot_true_iff in H. apply Fnot_true_double_elim in H.
+        apply H.
+       -intros H. apply Fnot_true_iff. rewrite <- Fnot_true_double_elim. apply H.
+Qed.
+
+Theorem Fcontra_intro : forall I F, I |= F /\ I |/= F <-> I |= ^**false.
+Proof. intros I F. split.
+       -intros H. destruct H. rewrite H in H0. inversion H0.
+       -intros H. rewrite Ffalse_is_false in H. inversion H.
+Qed.
+
+Example ex1p4 : forall I P Q, I |= ^*P /\ I |/= ^*Q -> I |= (^*P ^/\ ^*Q) ^-> (^*P ^\/ ^~^*Q).
+Proof. intros I P0 Q0 H. destruct H.
+       apply Fnot_true_iff in H0 as HQN.
+       apply Fand_false_introR with (F1 := ^*P0) in H0.
+       apply For_true_introL with (F2 := ^~ ^*Q0) in H.
+       apply Fimp_false_intro with (F2 := (^* P0 ^\/ ^~ ^* Q0)) in H0.
+       apply H0.
+Qed.
+
+(* 1.3 Satisfiability and Validity *)
+Definition satisfiable (F : formula) : Prop := (exists I, I |= F).
+Definition valid (F : formula) : Prop := (forall I, I |= F).
+
+Lemma Fnot_exists_iff_forall : forall F, ~ (exists I, I |= ^~ F) <-> (forall I, I |/= ^~ F).
+Proof. split; intros.
+       -apply not_true_iff_false. unfold not. intros H0.
+       unfold not in H. apply H. exists I. apply H0.
+       -intros H0. destruct H0. apply Fnot_true_iff in H0.
+        apply not_true_iff_false in H0. apply H0.
+        apply Fnot_true_double_elim. apply Fnot_true_iff. apply H.
+Qed.
+
+Theorem Fvalid_iff_notsat : (forall F : formula,  valid F <-> ~ satisfiable (^~ F)).
+Proof. intros F. unfold valid. unfold satisfiable. unfold not. split.
+       -intros H [I]. apply Fnot_true_iff in H0. rewrite H in H0. inversion H0.
+       -intros H I. apply Fnot_exists_iff_forall with (I := I) in H.
+        apply Fnot_true_iff in H. apply Fnot_true_double_elim in H. apply H.
+Qed.
+
+
+Example ex1p5 : valid (^*P ^/\ ^*Q ^-> ^*P ^\/ ^~^*Q).
+Proof. unfold valid. intros I. rewrite Fimp_true_iff.
+       intros H. rewrite Fand_true_iff in H. destruct H.
+       rewrite For_true_iff. left. apply H.
+Qed.
+
+(*inorder to prove not valid, have to prove the negation is satisfiable*)
+Theorem ex1p6 : ~ valid (^*P ^\/ ^*Q ^-> ^*P ^/\ ^*Q).
+Proof. unfold not. intros con. apply Fvalid_iff_notsat in con.
+       apply con. unfold satisfiable. exists [(P,true);(Q,false)].
+       simpl. reflexivity.
+Qed.
+
+Example ex1p7 : valid (^*P ^/\ ^*Q ^-> ^*P ^\/ ^~^*Q).
+Proof. rewrite Fvalid_iff_notsat. unfold satisfiable. unfold not. intros H.
+       destruct H as [I]. apply Fnot_true_iff in H. rewrite Fimp_false_elim in H.
+       destruct H. apply Fand_true_iff in H. destruct H. apply For_false_iff in H0.
+       destruct H0. rewrite H in H0. inversion H0.
+Qed.
+
+Example ex1p8 : valid ((^*P ^-> ^*Q)^/\(^*Q ^-> ^*R) ^-> (^*P ^-> ^*R)).
+Proof. rewrite Fvalid_iff_notsat. unfold satisfiable. unfold not. intros H.
+       destruct H as [I]. rewrite Fnot_true_iff in H. rewrite Fimp_false_elim in H.
+       destruct H. apply Fand_true_iff in H. destruct H. apply Fimp_false_elim in H0.
+       destruct H0. apply Fimp_true_elim in H. destruct H.
+       -rewrite H in H0. inversion H0.
+       -apply Fimp_true_elim in H1. destruct H1.
+        *rewrite H in H1. inversion H1.
+        *rewrite H1 in H2. inversion H2.
+Qed.
+
+Theorem Fmodus_ponens : forall I F1 F2, I |= F1 -> I |= F1 ^-> F2 -> I |= F2.
+Proof. intros I F1 F2 H H0. rewrite Fimp_true_iff in H0. apply H0 in H. apply H.
+Qed.
+
+Fixpoint expand_formula (f : formula) : list formula :=
+  match f with
+  | FAto a => FAto a :: nil   
+  | FNot A => [FNot A] ++ expand_formula A 
+  | FOr A B =>  [FOr A B] ++ expand_formula A ++ expand_formula B
+  | FAnd A B => [FAnd A B] ++ expand_formula A ++ expand_formula B
+  | FImp A B => [FImp A B] ++ expand_formula A ++ expand_formula B
+  | FIff A B => [FIff A B] ++ expand_formula A ++ expand_formula B
+  end.
+
+Fixpoint SYNeq (F1 F2 : formula) : bool :=
+  match F1, F2 with
+  | ^* A , ^* B => beq_id A B
+  | ^** A, ^** B => eqb A B
+  | ^~ A , ^~ B => SYNeq A B
+  | A ^\/ B, C ^\/ D 
+  | A ^/\ B, C ^/\ D 
+  | A ^-> B, C ^-> D 
+  | A ^<-> B, C ^<-> D => andb (SYNeq A C) (SYNeq B D)
+  | _, _ => false
+  end.
+Notation "A SYN= B" := (SYNeq A B = true) (at level 80).
+Notation "A SYN<> B" := (SYNeq A B = false) (at level 80).
+
+Definition SList : Type := list (formula*formula).
+Fixpoint sub_function (f : formula -> formula) (l : SList) : formula -> formula :=
+  match l with
+  | nil => f
+  | h :: t => (sub_function 
+              (fun (F : formula) => (if (SYNeq (fst h) F) then (snd h) else (f F)))
+              t )
+  end.
+
+
+  

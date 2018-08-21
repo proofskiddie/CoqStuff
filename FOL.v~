@@ -1,0 +1,13 @@
+Require Import Coq.Lists.List.
+Check nexp 2 2.
+Inductive Term : nat -> Set :=
+| C n : Term (7 + 8 * n)
+| X n : Term (13 + 8 * n)
+| F n : forall (m : nat), Term (1 + 8 * (             
+
+
+
+Record Language : Set := L {
+  terms : Term,                                      
+  relations : Relation
+}.                        
